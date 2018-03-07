@@ -1,0 +1,16 @@
+.discord-guild {
+}
+
+.discord-text-channel-titled-pane .title {
+  -fx-region-background: null;
+  -fx-region-border: null;
+}
+
+.discord-text-channel-cant-talk {
+  -fx-background-color: #9370db50;
+  -fx-background-radius: 0.15em;
+}
+.unread-events,
+.unread-events .label {
+  -fx-font-weight: bold;
+}
