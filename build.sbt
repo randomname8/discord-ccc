@@ -11,10 +11,15 @@ lazy val ccc = RootProject(file("../ccc"))
 lazy val root = Project("ccc-discord", file(".")).enablePlugins(DeployerPlugin).dependsOn(ccc)
 
 libraryDependencies ++= Seq(
+  "org.asynchttpclient" % "async-http-client" % "2.0.33",
+  "com.beachape" %% "enumeratum" % "1.5.12",
+  "com.github.benhutchison" %% "prickle" % "1.1.14",
+  "org.json4s" %% "json4s-native" % "3.5.2",
+  "org.scala-stm" %% "scala-stm" % "0.8",
   "net.dv8tion" % "JDA" % "3.5.1_339" exclude ("net.java.dev.jna", "jna"),
   "org.openjdk.jol" % "jol-core" % "0.9" % "test",
 )
-
+resolvers += "jitpack.io" at "https://jitpack.io"
 mainClass in reStart := Some("ccc.DevAppReloader")
 
 
