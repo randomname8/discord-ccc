@@ -31,6 +31,15 @@ object CustomPicklers {
       case other => Failure(new RuntimeException(s"$other is not a JBool"))
     }
   }
+  
+  implicit val snowflakePickler = new FullPickler[Snowflake] {
+    override def pickle[P](o: Snowflake, state)(implicit conf) = JString(o.snowflakeString).asInstanceOf[P]
+    override def unpickle[P](v, state)(implicit conf) = v match {
+      case JString(s) => Success(Snowflake(s))
+      case JLong(l) => Success(Snowflake(l))
+      case other => Failure(new RuntimeException(s"$other is not a JLong"))
+    }
+  }
 
   implicit def mapPickler[V: Pickler: Unpickler] = new FullPickler[Map[String, V]] {
     override def pickle[P](v: Map[String, V], state)(implicit config: PConfig[P]): P = {
@@ -112,6 +121,8 @@ object CustomPicklers {
   implicit val emojiUnpickler = implicitly[Unpickler[Emoji]]
   implicit val voiceStatePickler = implicitly[Pickler[VoiceState]]
   implicit val voiceStateUnpickler = implicitly[Unpickler[VoiceState]]
+  implicit val channelStatePickler = implicitly[Pickler[Channel]]
+  implicit val channelStateUnpickler = implicitly[Unpickler[Channel]]
   implicit val overwritePickler = implicitly[Pickler[Overwrite]]
   implicit val overwriteUnpickler = implicitly[Unpickler[Overwrite]]
   implicit val dmChannelPickler = implicitly[Pickler[DmChannel]]
