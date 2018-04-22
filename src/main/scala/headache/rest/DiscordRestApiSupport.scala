@@ -23,25 +23,28 @@ private[headache] trait DiscordRestApiSupport {
   
   @volatile var maxQueuedRequests: Int = 100
   
+  def optSnowflake(s: Snowflake) = if (s == NoSnowflake) None else Some(s)
   object channels extends Endpoint {
     def baseRequest(channelId: String) = s"/channels/${channelId}"
     
-    def get(channelId: Snowflake)(implicit s: BackPressureStrategy): Future[Channel] = request(channelId)(parseJson(_).dyn.extract[Channel])
-    def modify(channel: Channel)(implicit s: BackPressureStrategy): Future[Unit] = request(channel.id, method = "PATCH", body = toJson(channel), expectedStatus = 201)(_ => ())
-    def delete(channelId: Snowflake)(implicit s: BackPressureStrategy): Future[Unit] = request(channelId, method = "DELETE")(_ => ())
+    def get(channelId: Snowflake)(implicit s: BackPressureStrategy): Future[Channel] = request(channelId.snowflakeString)(parseJson(_).dyn.extract[Channel])
+    def modify(channel: Channel)(implicit s: BackPressureStrategy): Future[Unit] = request(channel.id.snowflakeString, method = "PATCH", body = toJson(channel), expectedStatus = 201)(_ => ())
+    def delete(channelId: Snowflake)(implicit s: BackPressureStrategy): Future[Unit] = request(channelId.snowflakeString, method = "DELETE")(_ => ())
     
     def getMessage(channelId: Snowflake, messageId: Snowflake)(implicit s: BackPressureStrategy): Future[Message] = 
-      request(channelId, extraPath = s"/messages/$messageId")(parseJson(_).dyn.extract[Message])
+      request(channelId.snowflakeString, extraPath = s"/messages/$messageId")(parseJson(_).dyn.extract[Message])
     
-    def getMessages(channelId: Snowflake, around: Snowflake = null, before: Snowflake = null, after: Snowflake = null, limit: Int = 100)(implicit s: BackPressureStrategy): Future[Seq[Message]] = {
+    def getMessages(channelId: Snowflake, around: Snowflake = NoSnowflake, before: Snowflake = NoSnowflake, after: Snowflake = NoSnowflake,
+                    limit: Int = 100)(implicit s: BackPressureStrategy): Future[Seq[Message]] = {
       require(around != null || before != null || after != null)
-      val params = Seq("limit" -> limit.toString) ++ Option(around).map("around" -> _) ++ Option(before).map("before" -> _) ++ Option(after).map("after" -> _)
-      request(channelId, extraPath = "/messages", queryParams = params.toSeq)(parseJson(_).dyn.extract[Seq[Message]])
+      val params = Seq("limit" -> limit.toString) ++ optSnowflake(around).map("around" -> _.snowflakeString) ++ 
+        optSnowflake(before).map("before" -> _.snowflakeString) ++ optSnowflake(after).map("after" -> _.snowflakeString)
+      request(channelId.snowflakeString, extraPath = "/messages", queryParams = params.toSeq)(parseJson(_).dyn.extract[Seq[Message]])
     }
     
-    def createMessage(channelId: String, message: String, embed: Embed = null, tts: Boolean = false)(implicit s: BackPressureStrategy): Future[Message] = {
+    def createMessage(channelId: Snowflake, message: String, embed: Embed = null, tts: Boolean = false)(implicit s: BackPressureStrategy): Future[Message] = {
       val body = ("content" -> message) ~ ("nonce" -> (null: String)) ~ ("tts" -> tts) ~ ("embed" -> toJson(Option(embed)))
-      request(channelId, extraPath = "/messages", body = body)(parseJson(_).dyn.extract[Message])
+      request(channelId.snowflakeString, extraPath = "/messages", body = body)(parseJson(_).dyn.extract[Message])
     }
     
     //more to come
