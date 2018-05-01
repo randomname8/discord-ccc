@@ -32,20 +32,20 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
     override def isActive = active
     override def close() = if (active && websocket != null) websocket.close()
 
-    override def onOpen(ws): Unit = {
-      websocket = ws
+    override def onOpen(w: ws.WebSocket): Unit = {
+      websocket = w
       listener.onConnectionOpened(this)
       send(renderJson(gatewayMessage(VoiceOp.Identify, ("server_id" -> voiceServerUpdate.guildId) ~
         ("user_id" -> voiceStateUpdate.voiceState.userId) ~
         ("session_id" -> voiceStateUpdate.sessionId) ~
         ("token" -> voiceServerUpdate.token))))
     }
-    override def onClose(ws): Unit = if (isActive) {
+    override def onClose(w: ws.WebSocket): Unit = if (isActive) {
       websocket = null
       active = false
       listener.onConnectionClosed(this)
     }
-    override def onClose(ws, code, reason): Unit = if (isActive) {
+    override def onClose(w: ws.WebSocket, code: Int, reason: String): Unit = if (isActive) {
       websocket.close()
       websocket = null
       active = false
@@ -161,7 +161,7 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
       })
     }
 
-    override def onError(ex): Unit = listener.onConnectionError(this, ex)
+    override def onError(ex: Throwable): Unit = listener.onConnectionError(this, ex)
     override def onMessage(msg: String): Unit = {
       val payload = parseJson(msg).dyn
 
@@ -192,7 +192,6 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
           send(renderJson(gatewayMessage(VoiceOp.Heartbeat, System.currentTimeMillis)))
           //after sending the heartbeat, change the current behaviour to detect the answer
           //if no answer is received in 5 seconds, reconnect.
-          val now = System.currentTimeMillis
           val prevBehaviour = stateMachine.current
 
           val timeout = timer.newTimeout({ timeout =>
@@ -201,7 +200,7 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
               close()
               onClose(websocket)
             }
-          }, (interval * 0.9).toInt, MILLISECONDS)
+          }, (interval * 0.9).toLong, MILLISECONDS)
 
           lazy val detectHeartbeatAck: stateMachine.Transition = stateMachine.transition {
             case (_, VoiceOp.Heartbeat) =>
@@ -215,7 +214,7 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
           stateMachine.switchTo(detectHeartbeatAck)
           nextHeartbeat(interval)
         }
-      }, interval, MILLISECONDS)
+      }, interval.toLong, MILLISECONDS)
 
     }
     def discoverIp(ssrc: Int, socket: DatagramSocket): InetSocketAddress = {

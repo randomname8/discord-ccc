@@ -7,11 +7,31 @@ case class User(
   id: String,
   userName: String,
   discriminator: String,
-  avatar: String,
+  avatar: Option[String],
   bot: Boolean,
   mfaEnabled: Option[Boolean],
   verified: Option[Boolean],
-  email: Option[String]
+  email: Option[String],
+  premium: Option[Boolean]
+)
+
+case class UserSettings(
+  timezoneOffset: Int, //minutes
+  theme: String,
+  status: String,
+  showCurrentGame: Boolean,
+  renderReactions: Boolean,
+  renderEmbeds: Boolean,
+  messageDisplayCompact: Boolean,
+  locale: String,
+  inlineEmbedMedia: Boolean,
+  inlineAttachmentMedia: Boolean,
+  gifAutoPlay: Boolean,
+  guildPositions: Seq[Snowflake],
+  explicitContentFilter: Int,
+  convertEmoticons: Boolean,
+  animateEmoji: Boolean,
+  afkTimeout: Int
 )
 
 sealed abstract class ExplicitContentFilterLevel(val value: Int) extends IntEnumEntry
@@ -30,11 +50,11 @@ object NotificationLevel extends IntEnum[NotificationLevel] {
 trait GuildDef {
   def id: Snowflake
   def name: String
-  def icon: String
-  def splash: String
+  def icon: Option[String]
+  def splash: Option[String]
   def ownerId: Snowflake
   def region: String
-  def afkChannelId: Snowflake
+  def afkChannelId: Option[Snowflake]
   def afkTimeout: Int
   def embedEnabled: Option[Boolean]
   def embedChannelId: Option[Snowflake]
@@ -52,11 +72,11 @@ trait GuildDef {
 case class Guild(
   id: Snowflake,
   name: String,
-  icon: String,
-  splash: String,
+  icon: Option[String],
+  splash: Option[String],
   ownerId: Snowflake,
   region: String,
-  afkChannelId: Snowflake,
+  afkChannelId: Option[Snowflake],
   afkTimeout: Int,
   embedEnabled: Option[Boolean],
   embedChannelId: Option[Snowflake],
@@ -157,6 +177,7 @@ case class Channel(
   position: Option[Int],
   permissionOverwrites: Seq[Overwrite],
   topic: Option[String],
+  nsfw: Boolean,
   lastMessageId: Option[Snowflake],
   bitrate: Option[Int],
   userLimit: Option[Int],
@@ -164,16 +185,10 @@ case class Channel(
   icon: Option[String], //icon hash they say
   ownerId: Option[Snowflake],
   applicationId: Option[Snowflake],
+  lastPinTimestamp: Option[String],
 )
 
 case class Overwrite(id: String, tpe: String, allow: Int, deny: Int)
-
-case class DmChannel(
-  id: String,
-  isPrivate: Boolean,
-  recipient: User,
-  lastMessageId: String
-)
 
 case class Message(
   id: String,

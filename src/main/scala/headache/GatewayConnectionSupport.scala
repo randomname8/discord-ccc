@@ -1,13 +1,13 @@
 package headache
 
 import enumeratum.values.IntEnumEntry
-import java.io.{ByteArrayInputStream, BufferedReader, InputStreamReader}
+import java.io.{ByteArrayInputStream, BufferedReader, InputStreamReader, ByteArrayOutputStream}
 import java.time.Instant
 import java.util.Arrays
-import java.util.zip.InflaterInputStream
+import java.util.zip.{Inflater, InflaterInputStream, InflaterOutputStream}
 import org.asynchttpclient.ws
 
-import org.json4s.JsonAST.{JValue, JInt}
+import org.json4s.JsonAST.{JValue, JInt, JLong, JNull}
 import org.json4s.JsonDSL._
 import org.json4s.native.JsonParser
 import scala.annotation.tailrec
@@ -45,16 +45,16 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
     override def isActive = active
     override def close() = if (active && websocket != null) websocket.close()
 
-    override def onOpen(ws): Unit = {
-      websocket = ws
+    override def onOpen(w: ws.WebSocket): Unit = {
+      websocket = w
       listener.onConnectionOpened(this)
     }
-    override def onClose(ws): Unit = if (isActive) {
+    override def onClose(w: ws.WebSocket): Unit = if (isActive) {
       websocket = null
       active = false
       listener.onConnectionClosed(this)
     }
-    override def onClose(ws, code, reason): Unit = if (isActive) { //after a break down, netty will eventually realize that the socket broke, and even though we already called websocket.close(), it will eventually invoke this method.
+    override def onClose(w: ws.WebSocket, code: Int, reason: String): Unit = if (isActive) { //after a break down, netty will eventually realize that the socket broke, and even though we already called websocket.close(), it will eventually invoke this method.
       listener.onDisconnected(this, code, reason)
       reconnect(DisconnectedByServer)
     }
@@ -71,17 +71,17 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
       private[this] val identityMsg = renderJson {
         gatewayMessage(
           GatewayOp.Identify,
-          ("token" -> s"Bot $token") ~
+          ("token" -> token) ~
             ("properties" -> (
               ("$os" -> System.getProperty("os.name")) ~
               ("$browser" -> "strife v1.0") ~
-              ("$device" -> "strife") ~
+              ("$device" -> "strife")/* ~
               ("$referring_domain" -> "") ~
-              ("$referrer" -> "")
+              ("$referrer" -> "")*/
             )) ~
-              ("compress" -> true) ~
+              ("compress" -> false) ~
               ("large_threshold" -> 50) ~
-              ("shard" -> Seq(shardNumber, totalShards))
+              ("shard" -> Some(Seq(shardNumber, totalShards)).filter(_ => totalShards > 1))
         )
       }
 
@@ -94,7 +94,7 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
               send(identityMsg)
               handshake
             case Some(lastSession) =>
-              send(renderJson(gatewayMessage(GatewayOp.Resume, ("token" -> s"Bot $token") ~
+              send(renderJson(gatewayMessage(GatewayOp.Resume, ("token" -> token) ~
                 ("session_id" -> lastSession.data.id) ~
                 ("seq" -> lastSession.seq))))
               resume
@@ -142,7 +142,7 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
       }
     }
 
-    override def onError(ex): Unit = listener.onConnectionError(this, ex)
+    override def onError(ex: Throwable): Unit = listener.onConnectionError(this, Option(ex) getOrElse new RuntimeException("Something went wrong but we got null throwable?"))
     override def onMessage(msg: String): Unit = {
       //do basic stream parsing to obtain general headers, the idea is to avoid computation as much as possible here.
 
@@ -159,7 +159,7 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
             }
             case FieldStart("s") => p.nextToken match {
               case LongVal(seq) => parse(Some(seq), op, tpe)
-              case IntVal(seq) => parse(Some(seq.intValue), op, tpe)
+              case IntVal(seq) => parse(Some(seq.longValue), op, tpe)
               case NullVal => parse(None, op, tpe)
               case _ => p.fail("event type not a long")
             }
@@ -194,10 +194,24 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
 
       } catch { case NonFatal(e) => listener.onConnectionError(this, e) }
     }
+    
+    private[this] val accumulatedCompressedChunks = new collection.mutable.ArrayBuffer[Array[Byte]](10)
+    private[this] val compressedMessage = new ByteArrayOutputStream()
+    private[this] val uncompressedMessage = new ByteArrayOutputStream()
+    private[this] val inflater = new Inflater
     override def onMessage(bytes: Array[Byte]): Unit = {
-      val reader = new BufferedReader(new InputStreamReader(new InflaterInputStream(new ByteArrayInputStream(bytes))))
-      val msg = reader.lines.collect(java.util.stream.Collectors.joining())
-      onMessage(msg)
+      accumulatedCompressedChunks += bytes
+      val l = bytes.length
+      if (l >= 4 && bytes(l - 4) == 0 && bytes(l - 3) == 0 && bytes(l - 2) == -1 && bytes(l - 1) == -1) { //ZLIB suffix == 0x0000ffff
+        compressedMessage.reset()
+        uncompressedMessage.reset()
+        accumulatedCompressedChunks foreach compressedMessage.write
+        accumulatedCompressedChunks.clear()
+        compressedMessage.writeTo(new InflaterOutputStream(uncompressedMessage, inflater))
+        val reader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(uncompressedMessage.toByteArray)))
+        val msg = reader.lines.collect(java.util.stream.Collectors.joining())
+        onMessage(msg)
+      }
     }
 
     def send(msg: String) = {
@@ -262,7 +276,7 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
           stateMachine.switchTo(detectHeartbeatAck)
           nextHeartbeat(interval)
         }
-      }, interval, MILLISECONDS)
+      }, interval.toLong, MILLISECONDS)
     }
 
     def reconnect(reason: ReconnectReason): Unit = {

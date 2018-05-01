@@ -2,7 +2,7 @@ package headache
 
 import enumeratum.values._
 import java.time.Instant
-
+import prickle.{Unpickler, Pickler}
 import Json4sUtils._, Json4sPConfig.conf, CustomPicklers._
 
 object GatewayEvents {
@@ -42,17 +42,21 @@ object GatewayEvents {
   }
 
   case class GatewayEvent(tpe: EventType, payload: () => DynJValueSelector)
+  
+  case class ReadState(id: Snowflake, lastMessageId: Snowflake, mentionCount: Option[Int])
   case class Ready(
     v: Int,
     user: User,
-    privateChannels: Seq[DmChannel],
-    guilds: Seq[UnavailableGuild],
+    privateChannels: Seq[Channel],
+    guilds: Seq[UnavailableGuild Either Guild],
+    userSettings: Option[UserSettings],
+    readState: Seq[ReadState],
     /* presences: Seq[Any],
      relationships: Seq[Any], */
     _trace: Seq[String]
   )
   object Ready { def unapply(ge: GatewayEvent) = if (ge.tpe == EventType.Ready) Some(ge.payload().d.extract[Ready]) else None }
-
+  
   case object Resumed { def unapply(ge: GatewayEvent) = if (ge.tpe == EventType.Resumed) Some(()) else None }
 
   case class ChannelCreate(channel: Channel)
@@ -65,11 +69,11 @@ object GatewayEvents {
   case class Guild(
     id: Snowflake,
     name: String,
-    icon: String,
-    splash: String,
+    icon: Option[String],
+    splash: Option[String],
     ownerId: Snowflake,
     region: String,
-    afkChannelId: Snowflake,
+    afkChannelId: Option[Snowflake],
     afkTimeout: Int,
     embedEnabled: Option[Boolean],
     embedChannelId: Option[Snowflake],

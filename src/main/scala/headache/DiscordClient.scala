@@ -37,7 +37,7 @@ class DiscordClient(val token: String, val listener: DiscordClient.DiscordListen
   def fetchGateway(): Future[(String, Int)] = request(ahc.prepareGet(GATEWAY).setHeaders(baseHeaders))(
     asDynJson.andThen { jv =>
       listener.onGatewayData(jv)
-      (jv.url.extract[String] + "?encoding=json&v=6", jv.shards.extract)
+      (jv.url.extract[String] + "?encoding=json&v=6&compress=zlib-stream", jv.shards.extract)
     }
   )
 
@@ -184,7 +184,7 @@ object DiscordClient {
     def onUnexpectedVoiceOp(connection: DiscordClient#VoiceConnection, op: Int, data: => DynJValueSelector): Unit = {}
     def onMessageBeingSent(connection: DiscordClient#Connection, msg: String): Unit = {}
 
-    def onReconnecting(connection: DiscordClient#Connection, rason: ReconnectReason): Unit = {}
+    def onReconnecting(connection: DiscordClient#Connection, reason: ReconnectReason): Unit = {}
     def onConnectionOpened(connection: DiscordClient#Connection): Unit = {}
     def onConnectionClosed(connection: DiscordClient#Connection): Unit = {}
     def onDisconnected(connection: DiscordClient#Connection, code: Int, reason: String): Unit = {}
@@ -215,18 +215,18 @@ object DiscordClient {
     }.apply(evt)
     def undefHandler(evt: Event): Unit = {}
 
-    override def onGatewayEvent(connection) = evt => run(GatewayEvent(connection, evt))
-    override def onGatewayData(data): Unit = run(GatewayData(data))
-    override def onGatewayOp(connection, op, data): Unit = run(GatewayOp(connection, op, () => data))
-    override def onVoiceOp(connection, op, data): Unit = run(VoiceOp(connection, op, () => data))
-    override def onUnexpectedGatewayOp(connection, op, data): Unit = run(UnexpectedGatewayOp(connection, op, () => data))
-    override def onUnexpectedVoiceOp(connection, op, data): Unit = run(UnexpectedVoiceOp(connection, op, () => data))
-    override def onMessageBeingSent(connection, msg): Unit = run(MessageBeingSent(connection, msg))
-    override def onReconnecting(connection, reason): Unit = run(Reconnecting(connection, reason))
-    override def onConnectionOpened(connection): Unit = run(ConnectionOpened(connection))
-    override def onConnectionClosed(connection): Unit = run(ConnectionClosed(connection))
-    override def onDisconnected(connection, code, reason): Unit = run(Disconnected(connection, code, reason))
-    override def onConnectionError(connection, error): Unit = run(ConnectionError(connection, error))
+    override def onGatewayEvent(connection: DiscordClient#GatewayConnection) = evt => run(GatewayEvent(connection, evt))
+    override def onGatewayData(data: => DynJValueSelector): Unit = run(GatewayData(data))
+    override def onGatewayOp(connection: DiscordClient#GatewayConnection, op: headache.GatewayOp, data: => DynJValueSelector): Unit = run(GatewayOp(connection, op, () => data))
+    override def onVoiceOp(connection: DiscordClient#VoiceConnection, op: headache.VoiceOp, data: => DynJValueSelector): Unit = run(VoiceOp(connection, op, () => data))
+    override def onUnexpectedGatewayOp(connection: DiscordClient#GatewayConnection, op: Int, data: => DynJValueSelector): Unit = run(UnexpectedGatewayOp(connection, op, () => data))
+    override def onUnexpectedVoiceOp(connection: DiscordClient#VoiceConnection, op: Int, data: => DynJValueSelector): Unit = run(UnexpectedVoiceOp(connection, op, () => data))
+    override def onMessageBeingSent(connection: DiscordClient#Connection, msg: String): Unit = run(MessageBeingSent(connection, msg))
+    override def onReconnecting(connection: DiscordClient#Connection, reason: ReconnectReason): Unit = run(Reconnecting(connection, reason))
+    override def onConnectionOpened(connection: DiscordClient#Connection): Unit = run(ConnectionOpened(connection))
+    override def onConnectionClosed(connection: DiscordClient#Connection): Unit = run(ConnectionClosed(connection))
+    override def onDisconnected(connection: DiscordClient#Connection, code: Int, reason: String): Unit = run(Disconnected(connection, code, reason))
+    override def onConnectionError(connection: DiscordClient#Connection, error: Throwable): Unit = run(ConnectionError(connection, error))
 
   }
 }

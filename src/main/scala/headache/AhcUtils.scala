@@ -19,21 +19,21 @@ object AhcUtils {
   ): Future[T] = {
     val promise = Promise[T]()
     reqBuilder execute new AsyncCompletionHandler[T] {
-      override def onCompleted(r) = {
+      override def onCompleted(r: Response) = {
         val res = onCompletedF(r)
         promise.success(res)
         res
       }
-      override def onThrowable(t) = promise.failure(t)
-      override def onBodyPartReceived(header) = {
+      override def onThrowable(t: Throwable) = promise.failure(t)
+      override def onBodyPartReceived(header: HttpResponseBodyPart) = {
         val r = super.onBodyPartReceived(header)
         if (onBodyPartReceivedF != null) onBodyPartReceivedF(header) else r
       }
-      override def onStatusReceived(header) = {
+      override def onStatusReceived(header: HttpResponseStatus) = {
         val r = super.onStatusReceived(header)
         if (onStatusReceivedF != null) onStatusReceivedF(header) else r
       }
-      override def onHeadersReceived(header) = {
+      override def onHeadersReceived(header: HttpResponseHeaders) = {
         val r = super.onHeadersReceived(header)
         if (onHeadersReceivedF != null) onHeadersReceivedF(header) else r
       }
@@ -45,7 +45,7 @@ object AhcUtils {
         val r = super.onContentWritten()
         if (onContentWrittenF != null) onContentWrittenF() else r
       }
-      override def onContentWriteProgress(amount, current, total) = {
+      override def onContentWriteProgress(amount: Long, current: Long, total: Long) = {
         val r = super.onContentWriteProgress(amount, current, total)
         if (onContentWriteProgressF != null) onContentWriteProgressF(amount, current, total) else r
       }

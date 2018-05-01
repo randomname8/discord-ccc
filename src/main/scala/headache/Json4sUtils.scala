@@ -21,6 +21,8 @@ object Json4sUtils {
   }
 
   def parseJson(s: String): JValue = JsonMethods.parse(s)
-  def renderJson(jv: JValue): String = JsonMethods.compact(JsonMethods.render(jv))
+  def renderJson(jv: JValue, pretty: Boolean = false): String =
+    if (pretty) JsonMethods.pretty(JsonMethods.render(jv))
+    else JsonMethods.compact(JsonMethods.render(jv))
   def toJson[T](t: T)(implicit p: Pickler[T], c: PConfig[JValue]): JValue = Pickle[T, JValue](t)
 }
