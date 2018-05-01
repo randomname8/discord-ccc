@@ -2,6 +2,7 @@ package discordccc
 
 import better.files._
 import ccc._
+import java.time.LocalDateTime
 import java.util.function.Consumer
 import javafx.application.{Application, Platform}
 import javafx.beans.property.SimpleObjectProperty
@@ -36,12 +37,13 @@ class CccDiscord extends BaseApplication with DiscordNavigationTree {
     res
   }  
   val markdownRenderer = new DiscordMarkdownRenderer(getHostServices, imagesCache)
-  val chatList = new ChatList[User, Message](getHostServices, markdownRenderer, emojis.mapValues(_.get),
-                                             _.getName,
-                                             msg => msg.getContentDisplay,
-                                             m => m.getCreationTime.toLocalDateTime)
+  val chatList = new ChatList[Member, Message](getHostServices, markdownRenderer, emojis.mapValues(_.get),
+                                             _.nickname,
+                                             _.text,
+                                             m => LocalDateTime.ofInstant(m.created, null))
   chatList.messageFormatter.set(DiscordMarkdown.adaptToMarkdown)
   chatList.additionalMessageRenderFactory set new DiscordAdditionalMessageRenderer(imagesCache, markdownRenderer)
+//  chatList.userNameNodeFactory set DiscordMemberRender.apply
   val chatTextInput = new ChatTextInput(markdownRenderer, emojis.mapValues(_.get))
   
   lazy val menuBar = sceneRoot.lookup("#menubar").asInstanceOf[MenuBar]
@@ -50,7 +52,7 @@ class CccDiscord extends BaseApplication with DiscordNavigationTree {
   
   val selectedMessageChannel = new SimpleObjectProperty[MessageChannel](this, "selectedMessageChannel")
   
-  override def extraInitialize(stage) = {
+  override def extraInitialize(stage: Stage) = {
     if (emojioneDir.isEmpty() || { val subFiles = emojioneDir.list.map(_.nameWithoutExtension).toArray; !util.EmojiOne.allEmojis.forall(e => subFiles.contains(e.filename))}) {
       downloadEmojiOne()
     }
@@ -98,7 +100,7 @@ class CccDiscord extends BaseApplication with DiscordNavigationTree {
             history.getRetrievedHistory.asScala.reverse.foreach (msg =>
               chatList.addEntry(msg.getAuthor, imagesCache(userImage(msg.getAuthor)), msg))
             chatList.scrollTo(chatList.itemsScala.size)
-            
+
             configureChatListScrollBar
           }, jdaAsyncExceptionReporter)
     }
@@ -148,7 +150,7 @@ class CccDiscord extends BaseApplication with DiscordNavigationTree {
             val updated = box.copy(messages = box.messages.updated(idx, evt.getMessage))
             chatList.itemsScala.update(chatList.itemsScala indexOf box, updated)
           }
-        case evt: MessageEmbedEvent if evt.getChannel == selectedMessageChannel.get => 
+        case evt: MessageEmbedEvent if evt.getChannel == selectedMessageChannel.get =>
           chatList.itemsScala.find(_.messages.exists(_.getIdLong == evt.getMessageIdLong)) foreach { box =>
             val om = box.messages.find(_.getIdLong == evt.getMessageIdLong).get
             DiscordMessageUtils.setEmebds(om, evt.getMessageEmbeds)
@@ -156,7 +158,7 @@ class CccDiscord extends BaseApplication with DiscordNavigationTree {
             chatList.getItems.set(idx, box.copy(messages = Vector.empty)) //need to clean it first for the cell to update
             chatList.getItems.set(idx, box)
           }
-          
+
         case evt: MessageDeleteEvent if evt.getChannel == selectedMessageChannel.get =>
           chatList.itemsScala.find(_.messages.exists(_.getIdLong == evt.getMessageIdLong)) foreach { box =>
             val updated = box.copy(messages = box.messages.filterNot(_.getIdLong == evt.getMessageIdLong))
