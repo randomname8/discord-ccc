@@ -1,7 +1,5 @@
 package headache
 
-import language.{higherKinds, existentials}
-
 /**
  * Simple implementation of a state machine. Notice that state keeping is not thread safe (it wouldn't make much sense either). If you
  * need to use the state machine from different threads, override apply and synchronize it calling super.apply

@@ -50,7 +50,7 @@ object Json4sPConfig extends PConfig[JValue] {
   def readObjectField(x: JValue, field: String): Try[JValue] = x match {
     case any if field == IgnoreRefField => Failure(IgnoredFieldException)
     case JObject(fields) =>
-      //      println(s"getting field $field")
+//            println(s"getting field $field")
       val f = if (field == "tpe") "type" else field
       Success(fields.find(_._1 == f).map(_._2).getOrElse(JNull)) //missing fields are the same the field being present and null
     //      Try(x.value(field)).orElse(fail(
