@@ -1,6 +1,5 @@
 package discordccc
 
-import net.dv8tion.jda.core.entities.Message
 
 object DiscordMarkdown {
 
@@ -8,10 +7,13 @@ object DiscordMarkdown {
    * Apply necessary transformations to the Discord supported markdown to transform it to standard markdown.
    */
   def adaptToMarkdown(message: Message): String = {
-    var res = message.getContentDisplay.trim.replace(" ```", "\n```").replace("\n", "\\\n")
-    message.getEmotes forEach { emote =>
-      res = res.replace(s":${emote.getName}:", s"""![emoji](${emote.getImageUrl} "${emote.getName}")""")
+    val res = new StringBuilder
+    message.content foreach {
+      case Content.Text(t) => res.append(t)
+      case Content.InlinedImage(name, url, _, true) => res.append(s"""![emoji]($url "name")""")
+      case Content.InlinedImage(name, url, _, _) => res.append(s"""![image]($url "name")""")
+      case _ => 
     }
-    res
+    res.result
   }
 }

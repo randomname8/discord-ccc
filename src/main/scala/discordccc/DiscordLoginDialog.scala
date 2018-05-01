@@ -1,16 +1,15 @@
 package discordccc
 
 import ccc._
-import javafx.application.Platform
 import javafx.beans.value.ChangeListener
 import javafx.event.ActionEvent
 import javafx.scene.control.{ButtonType, ButtonBar, Dialog, TextField, Button, ProgressBar, Label}
 import javafx.scene.image.ImageView
 import javafx.scene.paint.Color
-import net.dv8tion.jda.core.{JDABuilder, AccountType, JDA}
-import scala.util.Try
+import org.asynchttpclient.AsyncHttpClient
+import JavafxExecutionContext.context
 
-class LoginDialog extends Dialog[JDA] {
+class DiscordLoginDialog(ahc: AsyncHttpClient, listener: headache.DiscordClient.DiscordListener) extends Dialog[headache.DiscordClient] {
   private val loginButtonType = new ButtonType("Login", ButtonBar.ButtonData.OK_DONE)
   getDialogPane.getButtonTypes.addAll(loginButtonType, ButtonType.CANCEL)
   
@@ -29,25 +28,25 @@ class LoginDialog extends Dialog[JDA] {
       if (!tokenTextField.getText.isEmpty) {
         loginButton setDisable true
         loadingIndicator setVisible true
-        new Thread(() => {
-            val jda = Try(new JDABuilder(AccountType.CLIENT).setToken(tokenTextField.getText).buildBlocking())
-            Platform.runLater { () =>
-              loadingIndicator setVisible false
-              jda.fold(ex => {
-                  statusMessage setText ex.getMessage
-                  statusMessage setVisible true
-                  lazy val textChangeListener: ChangeListener[String] = (_, _, newText) => {
-                    tokenTextField.textProperty.removeListener(textChangeListener)
-                    statusMessage setVisible false
-                    loginButton setDisable false
-                  }
-                  tokenTextField.textProperty.addListener(textChangeListener)
-                }, res => {
-                  setResult(res)
-                  close()
-                })
-            }
-          }).start()
+        
+        val client = new headache.DiscordClient(tokenTextField.getText, listener, ahc)
+        client.login(Some(1)) onComplete { result =>
+          loadingIndicator setVisible false
+          result.fold(ex => {
+              statusMessage setText ex.getMessage
+              statusMessage setVisible true
+              lazy val textChangeListener: ChangeListener[String] = (_, _, newText) => {
+                tokenTextField.textProperty.removeListener(textChangeListener)
+                statusMessage setVisible false
+                loginButton setDisable false
+              }
+              tokenTextField.textProperty.addListener(textChangeListener)
+            }, conns => {
+              println("got connections " + conns)
+              setResult(client)
+              close()
+            })
+        }
       }
     })
   
