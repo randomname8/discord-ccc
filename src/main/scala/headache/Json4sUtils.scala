@@ -2,27 +2,28 @@ package headache
 
 import language.dynamics
 
-import org.json4s._
-import org.json4s.native.JsonMethods
-import prickle._
+//import org.json4s._
+//import org.json4s.native.JsonMethods
+//import prickle._
 import scala.annotation.unchecked.uncheckedVariance
+import play.api.libs.json._
 
 object Json4sUtils {
 
-  type Unpickler[+T] = prickle.Unpickler[T @uncheckedVariance]
+  type Reads[+T] = play.api.libs.json.Reads[T @uncheckedVariance]
+  type Writes[+T] = play.api.libs.json.Writes[T @uncheckedVariance]
 
-  implicit class jValue2Dyn(val jv: JValue) extends AnyVal {
-    def dyn = new DynJValueSelector(jv)
+  implicit class jValue2Dyn(val jv: JsValue) extends AnyVal {
+    def dyn = new DynJValueSelector(JsDefined(jv))
   }
-  class DynJValueSelector(val jv: JValue) extends AnyVal with Dynamic {
+  class DynJValueSelector(val jv: JsLookupResult) extends AnyVal with Dynamic {
     def selectDynamic(field: String) = new DynJValueSelector(jv \ field)
-    def extract[T](implicit unpickler: Unpickler[T], conf: PConfig[JValue]): T = Unpickle[T].from(jv)(conf).get
+    def extract[T](implicit read: Reads[T]): T = jv.validate[T].get
     override def toString = jv.toString
   }
 
-  def parseJson(s: String): JValue = JsonMethods.parse(s)
-  def renderJson(jv: JValue, pretty: Boolean = false): String =
-    if (pretty) JsonMethods.pretty(JsonMethods.render(jv))
-    else JsonMethods.compact(JsonMethods.render(jv))
-  def toJson[T](t: T)(implicit p: Pickler[T], c: PConfig[JValue]): JValue = Pickle[T, JValue](t)
+  def renderJson(jv: JsValue, pretty: Boolean = false): String =
+    if (pretty) Json.prettyPrint(jv)
+  else Json.stringify(jv)
+  def toJson[T](t: T)(implicit p: Writes[T]): JsValue = p.writes(t)
 }

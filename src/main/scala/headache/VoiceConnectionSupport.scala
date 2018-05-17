@@ -4,12 +4,11 @@ import enumeratum.values.IntEnumEntry
 import java.io.{IOException}
 import java.net.{DatagramSocket, InetSocketAddress, DatagramPacket, SocketTimeoutException}
 import org.asynchttpclient.{ws}
-
-import org.json4s.JsonAST.JValue
+import play.api.libs.json.{Json, JsValue}
 import scala.concurrent._, duration._, ExecutionContext.Implicits._
-import Json4sUtils._, org.json4s.JsonDSL._, CustomPicklers._, Json4sPConfig.conf
 import scala.util.control.NoStackTrace
 import scala.util.control.NonFatal
+import Json4sUtils._
 
 private[headache] object VoiceConnectionSupport {
   val UdpKeepAlive = Array[Byte](0xC9.toByte, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -35,10 +34,10 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
     override def onOpen(w: ws.WebSocket): Unit = {
       websocket = w
       listener.onConnectionOpened(this)
-      send(renderJson(gatewayMessage(VoiceOp.Identify, ("server_id" -> voiceServerUpdate.guildId) ~
-        ("user_id" -> voiceStateUpdate.voiceState.userId) ~
-        ("session_id" -> voiceStateUpdate.sessionId) ~
-        ("token" -> voiceServerUpdate.token))))
+      send(renderJson(gatewayMessage(VoiceOp.Identify, Json.obj("server_id" -> voiceServerUpdate.guildId,
+        "user_id" -> voiceStateUpdate.voiceState.userId,
+        "session_id" -> voiceStateUpdate.sessionId,
+        "token" -> voiceServerUpdate.token))))
     }
     override def onClose(w: ws.WebSocket): Unit = if (isActive) {
       websocket = null
@@ -70,16 +69,16 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
           val ourIp = discoverIp(ssrc, socket)
           socket.setSoTimeout(5)
 
-          send(renderJson(gatewayMessage(
-            VoiceOp.SelectPayload,
-            ("protocol" -> "udp") ~
-              ("data" -> (
-                ("address" -> ourIp.getHostString) ~
-                ("port" -> ourIp.getPort) ~
-                ("mode" -> "xsalsa20_poly1305")
-              ))
-          )))
-
+            send(renderJson(gatewayMessage(
+                  VoiceOp.SelectPayload,
+                  Json.obj(
+                    "protocol" -> "udp",
+                    "data" -> Json.obj(
+                      "address" -> ourIp.getHostString,
+                      "port" -> ourIp.getPort,
+                      "mode" -> "xsalsa20_poly1305"))
+                )))
+            
           nextHeartbeat(heartbeatInterval)
           voiceConnected(ssrc, socket)
       })
@@ -97,7 +96,7 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
           def sendAudio() = {
             val audio = voiceProducer()
             if (audio.length > 0) {
-              if (!sendingAudio) send(renderJson(gatewayMessage(VoiceOp.Speaking, ("delay" -> 0) ~ ("speaking" -> true))))
+              if (!sendingAudio) send(renderJson(gatewayMessage(VoiceOp.Speaking, Json.obj("delay" -> 0, "speaking" -> true))))
               val data = DiscordAudioUtils.encrypt(seq, seq * 960 /*this is opus frame size*/ , ssrc, audio, secret)
 
               if (seq + 1 > Char.MaxValue) seq = 0
@@ -112,7 +111,7 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
               }
               sendingAudio = true
             } else if (sendingAudio) {
-              send(renderJson(gatewayMessage(VoiceOp.Speaking, ("delay" -> 0) ~ ("speaking" -> false))))
+              send(renderJson(gatewayMessage(VoiceOp.Speaking, Json.obj("delay" -> 0, "speaking" -> false))))
               sendingAudio = false
             }
           }
@@ -163,7 +162,7 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
 
     override def onError(ex: Throwable): Unit = listener.onConnectionError(this, ex)
     override def onMessage(msg: String): Unit = {
-      val payload = parseJson(msg).dyn
+      val payload = Json.parse(msg).dyn
 
       try {
         VoiceOp.withValueOpt(payload.op.extract).fold {
@@ -180,16 +179,16 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
       listener.onMessageBeingSent(this, msg)
       websocket.sendMessage(msg)
     }
-    def gatewayMessage(op: IntEnumEntry, data: JValue, eventType: Option[String] = None): JValue = {
-      ("op" -> op.value) ~
-        ("t" -> eventType.orNull) ~
-        ("d" -> data)
-    }
+    def gatewayMessage(op: IntEnumEntry, data: JsValue, eventType: Option[String] = None): JsValue = Json.obj(
+      "op" -> op.value,
+      "t" -> eventType.getOrElse(null),
+      "d" -> data
+    )
 
     def nextHeartbeat(interval: Int): Unit = {
       timer.newTimeout(timeout => if (isActive) {
         Future { // don't hog the timer thread
-          send(renderJson(gatewayMessage(VoiceOp.Heartbeat, System.currentTimeMillis)))
+          send(renderJson(gatewayMessage(VoiceOp.Heartbeat, Json toJson System.currentTimeMillis)))
           //after sending the heartbeat, change the current behaviour to detect the answer
           //if no answer is received in 5 seconds, reconnect.
           val prevBehaviour = stateMachine.current

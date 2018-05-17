@@ -5,7 +5,7 @@ import java.time.Instant
 import java.util.Arrays
 import org.asynchttpclient.{AsyncHttpClient, DefaultAsyncHttpClient, DefaultAsyncHttpClientConfig, ws}
 import scala.concurrent._, duration._, ExecutionContext.Implicits._
-import Json4sUtils._, CustomPicklers._, Json4sPConfig.conf
+import Json4sUtils._
 import AhcUtils._
 
 class DiscordClient(val token: String, val listener: DiscordClient.DiscordListener, val ahc: AsyncHttpClient = new DefaultAsyncHttpClient(

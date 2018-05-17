@@ -4,17 +4,15 @@ import enumeratum.values.IntEnumEntry
 import java.io.{ByteArrayInputStream, BufferedReader, InputStreamReader, ByteArrayOutputStream}
 import java.time.Instant
 import java.util.Arrays
-import java.util.zip.{Inflater, InflaterInputStream, InflaterOutputStream}
+import java.util.zip.{Inflater, InflaterOutputStream}
 import org.asynchttpclient.ws
-
-import org.json4s.JsonAST.{JValue, JInt, JLong, JNull}
-import org.json4s.JsonDSL._
 import org.json4s.native.JsonParser
+import play.api.libs.json.{Json, JsValue, JsNull}
 import scala.annotation.tailrec
 import scala.concurrent._, duration._, ExecutionContext.Implicits._
 import scala.util.control.NoStackTrace
 import scala.util.control.NonFatal
-import Json4sUtils._, CustomPicklers._, Json4sPConfig.conf
+import Json4sUtils._
 
 private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
   import DiscordClient._
@@ -71,17 +69,19 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
       private[this] val identityMsg = renderJson {
         gatewayMessage(
           GatewayOp.Identify,
-          ("token" -> token) ~
-            ("properties" -> (
-              ("$os" -> System.getProperty("os.name")) ~
-              ("$browser" -> "strife v1.0") ~
-              ("$device" -> "strife")/* ~
-              ("$referring_domain" -> "") ~
-              ("$referrer" -> "")*/
-            )) ~
-              ("compress" -> false) ~
-              ("large_threshold" -> 50) ~
-              ("shard" -> Some(Seq(shardNumber, totalShards)).filter(_ => totalShards > 1))
+          Json.obj(
+            "token" -> token,
+            "properties" -> Json.obj(
+              "$os" -> System.getProperty("os.name"),
+              "$browser" -> "strife v1.0",
+              "$device" -> "strife"
+            ),
+//                                        ("$referring_domain" -> "") ~
+//                                        ("$referrer" -> "")*/
+            "compress" -> false,
+            "large_threshold" -> 50,
+            "shard" -> Some(Seq(shardNumber, totalShards)).filter(_ => totalShards > 1)
+          )
         )
       }
 
@@ -94,9 +94,9 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
               send(identityMsg)
               handshake
             case Some(lastSession) =>
-              send(renderJson(gatewayMessage(GatewayOp.Resume, ("token" -> token) ~
-                ("session_id" -> lastSession.data.id) ~
-                ("seq" -> lastSession.seq))))
+              send(renderJson(gatewayMessage(GatewayOp.Resume, Json.obj("token" -> token,
+                "session_id" -> lastSession.data.id,
+                "seq" -> lastSession.seq))))
               resume
           }
       }
@@ -177,7 +177,7 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
       try {
         val (s, op, tpe) = JsonParser.parse(msg, parser)
         if (op == -1) throw new IllegalStateException("no option found in discord message?\n" + msg)
-        lazy val payload = parseJson(msg).camelizeKeys.dyn
+        lazy val payload = Json.parse(msg).dyn
 
         s foreach (seq = _)
         GatewayOp.withValueOpt(op).fold {
@@ -186,7 +186,7 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
 
           listener.onGatewayOp(this, op, payload)
           stateMachine.orElse[GatewayMessage, Unit] {
-            case GatewayMessage(GatewayOp.Heartbeat, _, _) => send(renderJson(("op" -> GatewayOp.Heartbeat.value) ~ ("d" -> seq)))
+            case GatewayMessage(GatewayOp.Heartbeat, _, _) => send(renderJson(Json.obj("op" -> GatewayOp.Heartbeat.value, "d" -> seq)))
             case GatewayMessage(GatewayOp.Dispatch, _, _) =>
             case _ =>
           }.apply(GatewayMessage(op, tpe, () => payload))
@@ -220,38 +220,41 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
       websocket.sendMessage(msg)
     }
 
-    def gatewayMessage(op: IntEnumEntry, data: JValue, eventType: Option[String] = None): JValue = {
-      ("op" -> op.value) ~
-        ("t" -> eventType.orNull) ~
-        ("s" -> seq) ~
-        ("d" -> data)
-    }
+    def gatewayMessage(op: IntEnumEntry, data: JsValue, eventType: Option[String] = None): JsValue = Json.obj(
+      "op" -> op.value,
+      "t" -> eventType.getOrElse(null),
+      "s" -> seq,
+      "d" -> data
+    )
 
     override def sendStatusUpdate(idleSince: Option[Instant], status: Status): Unit = {
       send(renderJson(
-        gatewayMessage(GatewayOp.StatusUpdate, ("idle_since" -> idleSince.map(e => JInt(e.toEpochMilli)).orNull) ~ ("game" -> (status match {
-          case Status.PlayingGame(game) => ("name" -> game): JValue
-          case Status.Streaming(name, url) => ("name" -> name) ~ ("url" -> url)
-          case Status.Empty => null
-        })), Some("STATUS_UPDATE"))
-      ))
+          gatewayMessage(
+            GatewayOp.StatusUpdate,
+            Json.obj("idle_since" -> idleSince.map(e => Json  toJsFieldJsValueWrapper e.toEpochMilli).getOrElse(JsNull),
+                     "game" -> (status match {
+                  case Status.PlayingGame(game) => Json.obj("name" -> game)
+                  case Status.Streaming(name, url) => Json.obj("name" -> name, "url" -> url)
+                  case Status.Empty => null
+                })), Some("STATUS_UPDATE"))
+        ))
     }
     override def sendRequestGuildMembers(guildId: String, query: String = "", limit: Int = 0): Unit = {
       send(renderJson(
-        gatewayMessage(GatewayOp.RequestGuildMembers, ("guild_id" -> guildId) ~ ("query" -> query) ~ ("limit" -> limit))
+        gatewayMessage(GatewayOp.RequestGuildMembers, Json.obj("guild_id" -> guildId, "query" -> query, "limit" -> limit))
       ))
     }
     override def sendVoiceStateUpdate(guildId: String, channelId: Option[String], selfMute: Boolean, selfDeaf: Boolean): Unit = {
       send(renderJson(
-        gatewayMessage(GatewayOp.VoiceStateUpdate, ("guild_id" -> guildId) ~ ("channel_id" -> channelId.orNull) ~
-          ("self_mute" -> selfMute) ~ ("self_deaf" -> selfDeaf), Some("VOICE_STATE_UPDATE"))
+        gatewayMessage(GatewayOp.VoiceStateUpdate, Json.obj("guild_id" -> guildId, "channel_id" -> channelId.getOrElse(null), "self_mute" -> selfMute, "self_deaf" -> selfDeaf),
+                       Some("VOICE_STATE_UPDATE"))
       ))
     }
 
     def nextHeartbeat(interval: Int): Unit = {
       timer.newTimeout(timeout => if (isActive) { // don't hog the timer thread
         Future {
-          send(renderJson(("op" -> GatewayOp.Heartbeat.value) ~ ("d" -> seq)))
+          send(renderJson(Json.obj("op" -> GatewayOp.Heartbeat.value, "d" -> seq)))
           //after sending the heartbeat, change the current behaviour to detect the answer
           //if no answer is received in 5 seconds, reconnect.
           val prevBehaviour = stateMachine.current

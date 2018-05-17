@@ -6,14 +6,12 @@ import java.nio.charset.Charset
 import java.util.Arrays
 import java.util.concurrent.atomic.AtomicInteger
 import org.asynchttpclient.{AsyncHttpClient, Param, RequestBuilder}
-import org.json4s.JsonAST.JValue
-import org.json4s.JsonDSL._
+import play.api.libs.json.{Json, JsValue}
 import scala.collection.JavaConverters._
 import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration._
-import scala.util.control.ControlThrowable
-import Json4sUtils._, CustomPicklers._, Json4sPConfig.conf
-import scala.util.control.NoStackTrace
+import scala.util.control.{ControlThrowable, NoStackTrace}
+import Json4sUtils._, JsonCodecs._
 
 private[headache] trait DiscordRestApiSupport {
 
@@ -27,24 +25,24 @@ private[headache] trait DiscordRestApiSupport {
   object channels extends Endpoint {
     def baseRequest(channelId: String) = s"/channels/${channelId}"
     
-    def get(channelId: Snowflake)(implicit s: BackPressureStrategy): Future[Channel] = request(channelId.snowflakeString)(parseJson(_).dyn.extract[Channel])
+    def get(channelId: Snowflake)(implicit s: BackPressureStrategy): Future[Channel] = request(channelId.snowflakeString)(Json.parse(_).dyn.extract[Channel])
     def modify(channel: Channel)(implicit s: BackPressureStrategy): Future[Unit] = request(channel.id.snowflakeString, method = "PATCH", body = toJson(channel), expectedStatus = 201)(_ => ())
     def delete(channelId: Snowflake)(implicit s: BackPressureStrategy): Future[Unit] = request(channelId.snowflakeString, method = "DELETE")(_ => ())
     
     def getMessage(channelId: Snowflake, messageId: Snowflake)(implicit s: BackPressureStrategy): Future[Message] = 
-      request(channelId.snowflakeString, extraPath = s"/messages/$messageId")(parseJson(_).dyn.extract[Message])
+      request(channelId.snowflakeString, extraPath = s"/messages/$messageId")(Json.parse(_).dyn.extract[Message])
     
     def getMessages(channelId: Snowflake, around: Snowflake = NoSnowflake, before: Snowflake = NoSnowflake, after: Snowflake = NoSnowflake,
                     limit: Int = 100)(implicit s: BackPressureStrategy): Future[Seq[Message]] = {
       require(around != null || before != null || after != null)
       val params = Seq("limit" -> limit.toString) ++ optSnowflake(around).map("around" -> _.snowflakeString) ++ 
         optSnowflake(before).map("before" -> _.snowflakeString) ++ optSnowflake(after).map("after" -> _.snowflakeString)
-      request(channelId.snowflakeString, extraPath = "/messages", queryParams = params.toSeq)(parseJson(_).dyn.extract[Seq[Message]])
+      request(channelId.snowflakeString, extraPath = "/messages", queryParams = params.toSeq)(Json.parse(_).dyn.extract[Seq[Message]])
     }
     
     def createMessage(channelId: Snowflake, message: String, embed: Embed = null, tts: Boolean = false)(implicit s: BackPressureStrategy): Future[Message] = {
-      val body = ("content" -> message) ~ ("nonce" -> (null: String)) ~ ("tts" -> tts) ~ ("embed" -> toJson(Option(embed)))
-      request(channelId.snowflakeString, extraPath = "/messages", body = body)(parseJson(_).dyn.extract[Message])
+      val body = Json.obj("content" -> message, "nonce" -> (null: String), "tts" -> tts, "embed" -> Option(embed))
+      request(channelId.snowflakeString, extraPath = "/messages", body = body)(Json.parse(_).dyn.extract[Message])
     }
     
     //more to come
@@ -58,7 +56,7 @@ private[headache] trait DiscordRestApiSupport {
     protected def baseRequest(token: String): String
     
     protected def request[T](token: String, extraPath: String = "", method: String = "GET", queryParams: Seq[(String, String)] = Seq.empty,
-                             body: JValue = null, expectedStatus: Int = 200)(parser: String => T)(implicit s: BackPressureStrategy): Future[T] = {
+                             body: JsValue = null, expectedStatus: Int = 200)(parser: String => T)(implicit s: BackPressureStrategy): Future[T] = {
       
       val base = baseRequest(token)
       var reqBuilder = new RequestBuilder(method).setUrl(base + extraPath).
@@ -77,7 +75,7 @@ private[headache] trait DiscordRestApiSupport {
               resp.getStatusCode match {
                 case `expectedStatus` => parser(body)
                 case 429 =>
-                  val rl = parseJson(body).dyn
+                  val rl = Json.parse(body).dyn
                   val deadline = rl.retry_after.extract[Int].millis
                   if (rl.global.extract) rateLimitRegistry.registerGlobalRateLimit(deadline.fromNow)
                   else rateLimitRegistry.registerGlobalRateLimit(deadline.fromNow)

@@ -1,6 +1,6 @@
 package headache
 
-import enumeratum.values.{IntEnum, IntEnumEntry}
+import enumeratum.values.{IntEnum, IntEnumEntry, StringEnum, StringEnumEntry}
 import java.time.Instant
 
 case class User(
@@ -8,7 +8,7 @@ case class User(
   userName: String,
   discriminator: String,
   avatar: Option[String],
-  bot: Boolean,
+  bot: Boolean = false,
   mfaEnabled: Option[Boolean],
   verified: Option[Boolean],
   email: Option[String],
@@ -172,23 +172,31 @@ object Channel {
 case class Channel(
   id: Snowflake,
   tpe: Channel.Type,
-  guildId: Option[Snowflake],
-  name: Option[String],
-  position: Option[Int],
-  permissionOverwrites: Seq[Overwrite],
-  topic: Option[String],
-  nsfw: Boolean,
+  guildId: Option[Snowflake] = None,
+  name: Option[String] = None,
+  position: Option[Int] = None,
+  permissionOverwrites: Seq[PermissionOverwrite] = Seq.empty,
+  topic: Option[String] = None,
+  nsfw: Boolean = false,
   lastMessageId: Option[Snowflake],
-  bitrate: Option[Int],
-  userLimit: Option[Int],
-  recipients: Seq[User],
-  icon: Option[String], //icon hash they say
-  ownerId: Option[Snowflake],
-  applicationId: Option[Snowflake],
-  lastPinTimestamp: Option[String],
+  bitrate: Option[Int] = None,
+  userLimit: Option[Int] = None,
+  recipients: Seq[User] = Seq.empty,
+  icon: Option[String] = None, //icon hash they say
+  ownerId: Option[Snowflake] = None,
+  applicationId: Option[Snowflake] = None,
+  lastPinTimestamp: Option[String] = None,
 )
 
-case class Overwrite(id: String, tpe: String, allow: Int, deny: Int)
+case class PermissionOverwrite(id: String, tpe: PermissionOverwrite.Type, allow: Long, deny: Long)
+object PermissionOverwrite {
+  sealed abstract class Type(val value: String) extends StringEnumEntry
+  object Type extends StringEnum[Type] {
+    val values = findValues
+    object Role extends Type("role")
+    object Member extends Type("member")
+  }
+}
 
 case class Message(
   id: String,
