@@ -7,7 +7,7 @@ import java.util.Arrays
 import java.util.zip.{Inflater, InflaterOutputStream}
 import org.asynchttpclient.ws
 import org.json4s.native.JsonParser
-import play.api.libs.json.{Json, JsValue, JsNull}
+import play.api.libs.json.{Json, JsValue, JsNull, JsObject}
 import scala.annotation.tailrec
 import scala.concurrent._, duration._, ExecutionContext.Implicits._
 import scala.util.control.NoStackTrace
@@ -79,16 +79,15 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
 //                                        ("$referring_domain" -> "") ~
 //                                        ("$referrer" -> "")*/
             "compress" -> false,
-            "large_threshold" -> 50,
-            "shard" -> Some(Seq(shardNumber, totalShards)).filter(_ => totalShards > 1)
-          )
+            "large_threshold" -> 50
+          ) ++ ( if (totalShards > 1) Json.obj("shard" -> Seq(shardNumber, totalShards)) else Json.obj())
         )
       }
 
       def initState = hello
       def hello = transition {
         case GatewayMessage(GatewayOp.Hello, _, payload) =>
-          nextHeartbeat(payload().d.heartbeatInterval.extract)
+          nextHeartbeat(payload().d.heartbeat_interval.extract)
           lastSession match {
             case None =>
               send(identityMsg)
@@ -103,7 +102,7 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
 
       def handshake = transition {
         case evt @ GatewayMessage(GatewayOp.Dispatch, Some("READY"), payload) =>
-          session = Some(SessionData(payload().d.sessionId.extract, payload().d.v.extract))
+          session = Some(SessionData(payload().d.session_id.extract, payload().d.v.extract))
           dispatcher(evt)
           dispatcher
 
@@ -222,10 +221,9 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
 
     def gatewayMessage(op: IntEnumEntry, data: JsValue, eventType: Option[String] = None): JsValue = Json.obj(
       "op" -> op.value,
-      "t" -> eventType.getOrElse(null),
       "s" -> seq,
       "d" -> data
-    )
+    ) ++ eventType.fold(Json.obj())(t => Json.obj("t" -> t))
 
     override def sendStatusUpdate(idleSince: Option[Instant], status: Status): Unit = {
       send(renderJson(
@@ -246,8 +244,8 @@ private[headache] trait GatewayConnectionSupport { self: DiscordClient =>
     }
     override def sendVoiceStateUpdate(guildId: String, channelId: Option[String], selfMute: Boolean, selfDeaf: Boolean): Unit = {
       send(renderJson(
-        gatewayMessage(GatewayOp.VoiceStateUpdate, Json.obj("guild_id" -> guildId, "channel_id" -> channelId.getOrElse(null), "self_mute" -> selfMute, "self_deaf" -> selfDeaf),
-                       Some("VOICE_STATE_UPDATE"))
+        gatewayMessage(GatewayOp.VoiceStateUpdate, Json.obj("guild_id" -> guildId, "self_mute" -> selfMute, "self_deaf" -> selfDeaf) ++
+                       channelId.fold(Json.obj())(c => Json.obj("channel_id" -> c)), Some("VOICE_STATE_UPDATE"))
       ))
     }
 

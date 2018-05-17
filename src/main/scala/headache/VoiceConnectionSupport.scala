@@ -181,9 +181,8 @@ private[headache] trait VoiceConnectionSupport { self: DiscordClient =>
     }
     def gatewayMessage(op: IntEnumEntry, data: JsValue, eventType: Option[String] = None): JsValue = Json.obj(
       "op" -> op.value,
-      "t" -> eventType.getOrElse(null),
       "d" -> data
-    )
+    ) ++ eventType.fold(Json.obj())(t => Json.obj("t" -> t))
 
     def nextHeartbeat(interval: Int): Unit = {
       timer.newTimeout(timeout => if (isActive) {
