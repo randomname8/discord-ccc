@@ -1,7 +1,7 @@
 package headache
 
 import prickle._
-import enumeratum.values.{IntEnum, IntEnumEntry}
+import enumeratum.values.{IntEnum, IntEnumEntry, StringEnum, StringEnumEntry}
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import org.json4s._
@@ -30,6 +30,15 @@ object CustomPicklers {
       case JNull => Success(false)
       case JBool(b) => Success(b)
       case other => Failure(new RuntimeException(s"$other is not a JBool"))
+    }
+  }
+  
+  implicit val longPickler: FullPickler[Long] = new FullPickler[Long] {
+    override def pickle[P](l: Long, state: PickleState)(implicit conf: PConfig[P]) = JLong(l).asInstanceOf[P]
+    override def unpickle[P](v: P, state: mutable.Map[String, Any])(implicit conf: PConfig[P]) = v match {
+      case JInt(i) => Success(i.toLong)
+      case JLong(l) => Success(l)
+      case other => Failure(new RuntimeException(s"$other is not a JLong or equivalent"))
     }
   }
   
@@ -66,7 +75,7 @@ object CustomPicklers {
   implicit def seqUnpickler[T: Unpickler]: Unpickler[Seq[T]] = new Unpickler[Seq[T]] {
     override def unpickle[P](v: P, state: mutable.Map[String, Any])(implicit config: PConfig[P]) = {
       v match {
-        case JArray(elems) => Try { elems.map(Unpickle[T].from(_, state)(config.asInstanceOf[PConfig[JValue]]).get) }
+        case JArray(elems) => Try { elems.map(Unpickle[T].from(_, state)(config.asInstanceOf[PConfig[JValue]]).get)(collection.breakOut): Vector[T] }
         case JNull => Success(Seq.empty)
         case other => Failure(new UnsupportedOperationException(s"Can't unpickle Seq from value: $other"))
       }
@@ -103,6 +112,10 @@ object CustomPicklers {
   implicit def intEnumPickler[T <: IntEnumEntry](implicit enum: IntEnum[T]): FullPickler[T] = new FullPickler[T] {
     override def pickle[P](e: T, state: PickleState)(implicit conf: PConfig[P]) = Pickle(e.value, state)
     override def unpickle[P](v: P, state: mutable.Map[String, Any])(implicit conf: PConfig[P]) = Unpickle[Int].from(v, state).map(enum.withValue)
+  }
+  implicit def stringEnumPickler[T <: StringEnumEntry](implicit enum: StringEnum[T]): FullPickler[T] = new FullPickler[T] {
+    override def pickle[P](e: T, state: PickleState)(implicit conf: PConfig[P]) = Pickle(e.value, state)
+    override def unpickle[P](v: P, state: mutable.Map[String, Any])(implicit conf: PConfig[P]) = Unpickle[String].from(v, state).map(enum.withValue)
   }
 
   implicit val userPickler: FullPickler[User] = new FullPickler[User] {
@@ -154,8 +167,8 @@ object CustomPicklers {
   implicit val voiceStateUnpickler: Unpickler[VoiceState] = Unpickler.materializeUnpickler
   implicit val channelStatePickler: Pickler[Channel] = Pickler.materializePickler
   implicit val channelStateUnpickler: Unpickler[Channel] = Unpickler.materializeUnpickler
-  implicit val overwritePickler: Pickler[Overwrite] = Pickler.materializePickler
-  implicit val overwriteUnpickler: Unpickler[Overwrite] = Unpickler.materializeUnpickler
+  implicit val overwritePickler: Pickler[PermissionOverwrite] = Pickler.materializePickler
+  implicit val overwriteUnpickler: Unpickler[PermissionOverwrite] = Unpickler.materializeUnpickler
   implicit val messageUpdatePickler: Pickler[MessageUpdate] = Pickler.materializePickler
   implicit val messageUpdateUnpickler: Unpickler[MessageUpdate] = Unpickler.materializeUnpickler
   implicit val embedThumbnailPickler: Pickler[EmbedThumbnail] = Pickler.materializePickler

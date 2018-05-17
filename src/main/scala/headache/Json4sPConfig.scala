@@ -47,15 +47,19 @@ object Json4sPConfig extends PConfig[JValue] {
 
   private val IgnoreRefField = "Json4sPConfig#ref"
   private val IgnoredFieldException = new RuntimeException("no ref field") with NoStackTrace
-  def readObjectField(x: JValue, field: String): Try[JValue] = x match {
-    case any if field == IgnoreRefField => Failure(IgnoredFieldException)
-    case JObject(fields) =>
-//            println(s"getting field $field")
-      val f = if (field == "tpe") "type" else field
-      Success(fields.find(_._1 == f).map(_._2).getOrElse(JNull)) //missing fields are the same the field being present and null
-    //      Try(x.value(field)).orElse(fail(
-    //      s"Cannot read field '$field' of '$x', available fields: ${x.value.values.mkString(", ")}"))
-    case other => error(s"field \'$field\'", s"$other")
+  def readObjectField(x: JValue, field: String): Try[JValue] = {
+//    println(s"getting field $field")
+    x match {
+      case any if field == IgnoreRefField => Failure(IgnoredFieldException)
+      case JObject(fields) =>
+        val f = if (field == "tpe") "type" else field
+        val r = fields.find(_._1 == f).map(_._2).getOrElse(JNull)
+//        if (!r.isInstanceOf[JObject]) println("  = " + r)
+        Success(r) //missing fields are the same the field being present and null
+        //      Try(x.value(field)).orElse(fail(
+        //      s"Cannot read field '$field' of '$x', available fields: ${x.value.values.mkString(", ")}"))
+      case other => error(s"field \'$field\' to be an object", s"$other")
+    }
   }
 
   def error(exp: String, actual: String) = Failure(new RuntimeException(s"Expected: $exp  Actual: $actual"))

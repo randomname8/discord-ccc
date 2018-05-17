@@ -2,6 +2,7 @@ package headache
 
 import org.asynchttpclient._
 import scala.concurrent._
+import play.api.libs.json.Json
 import Json4sUtils._
 
 object AhcUtils {
@@ -54,7 +55,7 @@ object AhcUtils {
   }
 
   val asDynJson: Response => DynJValueSelector = r => {
-    if ((200 until 299).contains(r.getStatusCode)) parseJson(r.getResponseBody()).dyn
+    if ((200 until 299).contains(r.getStatusCode)) Json.parse(r.getResponseBody()).dyn
     else throw new RuntimeException(s"Unexpected status ${r.getStatusCode}${if (r.getStatusText != null) " - " + r.getStatusText else ""}.\n" + r.getResponseBody())
   }
 }

@@ -1,10 +1,10 @@
 name := "ccc-discord"
 version := "0.1"
 
-scalaVersion := "2.12.4"
+scalaVersion := "2.12.6"
 fork := true
 
-scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature", "-Yinfer-argument-types", "-Yno-adapted-args", "-Xlint", "-Ypartial-unification", "-opt:_", "-opt-warnings:_", "-Ywarn-extra-implicit", "-Ywarn-inaccessible", "-Ywarn-infer-any", "-Ywarn-nullary-override", "-Ywarn-nullary-unit", "-Ywarn-numeric-widen")
+scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature", "-Yno-adapted-args", "-Xlint", "-Ypartial-unification", "-opt:_", "-opt-warnings:_", "-Ywarn-extra-implicit", "-Ywarn-inaccessible", "-Ywarn-infer-any", "-Ywarn-nullary-override", "-Ywarn-nullary-unit", "-Ywarn-numeric-widen")
 scalacOptions in (Compile, console) --= Seq("-Ywarn-unused:_", "-opt:_", "-Xlint")
 
 lazy val ccc = RootProject(file("../ccc"))
@@ -14,9 +14,13 @@ libraryDependencies ++= Seq(
   "org.asynchttpclient" % "async-http-client" % "2.0.33",
   "com.beachape" %% "enumeratum" % "1.5.12",
   "com.github.benhutchison" %% "prickle" % "1.1.14",
+  "com.typesafe.play" %% "play-json" % "2.6.7",
+  //"io.circe" %% "circe-derivation" % "0.9.0-M3",
   "org.json4s" %% "json4s-native" % "3.5.2",
   "org.scala-stm" %% "scala-stm" % "0.8",
-  "net.dv8tion" % "JDA" % "3.5.1_339" exclude ("net.java.dev.jna", "jna"),
+  "org.slf4j" % "slf4j-simple" % "1.7.25",
+  "com.twitter" %% "chill" % "0.9.1",
+  "org.scalatest" %% "scalatest" % "3.0.5" % "test",
   "org.openjdk.jol" % "jol-core" % "0.9" % "test",
 )
 resolvers += "jitpack.io" at "https://jitpack.io"
