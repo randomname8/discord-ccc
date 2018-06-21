@@ -3,25 +3,29 @@ package discordccc
 import ccc._
 import javafx.scene.Node
 import javafx.scene.control.skin.VirtualFlow
-import javafx.scene.control.{Label, TreeCell, ListView, ListCell, TreeItem, TitledPane}
+import javafx.scene.control.{Label, TreeCell, ListView, ListCell, TreeItem, TitledPane, ProgressIndicator}
 import javafx.beans.value.WeakChangeListener
 import javafx.geometry.Pos
 import javafx.scene.image.{Image, ImageView}
 import javafx.scene.layout.StackPane
 import javafx.scene.paint.Color
 import javafx.scene.text.Font
+import scala.concurrent.Future
 import ChatTreeItems._
 
 object ServersAccessTreeCell {
   val textLabelFont = Font.font(Font.getDefault.getName, Font.getDefault.getSize * 1.5)
   val unreadableChannelColor = Color.RED
   val defaultAvatarUrl = "https://discordapp.com/assets/dd4dbc0016779df1378e7812eabaa04d.png"
+  type ChannelId = String
+  type UserId = String
 }
+import ServersAccessTreeCell._
 class ServersAccessTreeCell(
   val imagesCache: collection.Map[String, util.WeakImage],
-  val usersLookup: String => User,
+  val membersFetcher: ChannelId => Future[Seq[Either[User, Member]]],
+  val usersLookup: UserId => User,
   val guildOwnerIcon: Image) extends TreeCell[Any] {
-  import ServersAccessTreeCell._
   
   
   //strong reference to our listener, this changes per item, effectively discarding the previous listener, and hence allowing it to be 
@@ -52,7 +56,7 @@ class ServersAccessTreeCell(
       getTreeItem match {
         case node: ChannelGroup =>
           node match {
-            case node @ ServerNode(item) => 
+            case node @ ServerNode(item) =>
               val serverIcon = item.imageUrl.map(icon => imageIcon(imagesCache(icon).get)).getOrElse(new Label(item.name.charAt(0).toUpper.toString))
               val graphic = entry(serverIcon, item.name, description = "server - " + item.location).modify(_.getStyleClass add "discord-guild")
               this setGraphic graphic
@@ -70,15 +74,27 @@ class ServersAccessTreeCell(
           }
           
           
-        case node @ ChannelNode(channel) => 
+        case node @ ChannelNode(channel) if channel.dmUserId.isEmpty => 
           val res = new TitledPane()
-          res.setOnMouseClicked(evt => getTreeView.getSelectionModel.select(getTreeItem))
           res.getStyleClass add "discord-text-channel-titled-pane"
           if (!channel.canTalk) res.getStyleClass add "discord-text-channel-cant-talk"
-          val members = channel.members.map(Right(_): Either[User, Member])
-          res.setGraphic(vbox(new Label(s"🗉 ${channel.name}"), new Label(members.size + " members")))
+          res.setGraphic(new Label(s"🗉 ${channel.name}"))
+          res.setCollapsible(false)
           res.setExpanded(false)
-          res.setContent(new MembersList(members))
+          
+          res.setOnMouseClicked { evt =>
+            getTreeView.getSelectionModel.select(getTreeItem)
+            if (evt.getClickCount == 2) {
+              res.setExpanded(!res.isExpanded)
+              res.setContent(null)
+              if (res.isExpanded) {
+                res.setContent(new ProgressIndicator())
+                import JavafxExecutionContext.context
+                membersFetcher(channel.id).foreach(users => res.setContent(new MembersList(users)))
+              }
+            }
+          }
+          
           this setGraphic res
           
           newEventListenerReference(node)
@@ -88,6 +104,11 @@ class ServersAccessTreeCell(
           } else {
             getGraphic.getStyleClass.remove("unread-events")
           }
+          
+        case node @ ChannelNode(channel) =>
+          val user = usersLookup(channel.dmUserId.get)
+          val icon = user.imageUrl.map(icon => imageIcon(imagesCache(icon).get)).getOrElse(new Label(user.name.charAt(0).toUpper.toString))
+          setGraphic(entry(icon, channel.name, if (user.friend) "Friend" else "DM"))
           
         case other => this setGraphic new Label("Unk. type " + other)
       }
@@ -111,11 +132,11 @@ class ServersAccessTreeCell(
             val color = item.right.toOption.flatMap(m => Option(m.color).filter(_ != 0).map(c => Color.rgb((c >>> 16) & 0xff, (c >>> 8) & 0xff, c & 0xff)))
             
             val res = entry(imageIcon(imagesCache(user.imageUrl.getOrElse(defaultAvatarUrl)).get),
-                            name,
-                            if (user.bot) "BOT" else user.name + "#" + user.extra,
-                            color.orNull)
+                            name, if (user.bot) "BOT" else user.name + "#" + user.extra, color.orNull)
+
             if (item.right.map(_.isOwner) getOrElse false)
               res.getChildren add new ImageView(guildOwnerIcon).modify(_ setPreserveRatio true, _ setFitWidth textLabelFont.getSize)
+
             setGraphic(res)
           } else {
             setGraphic(null)
