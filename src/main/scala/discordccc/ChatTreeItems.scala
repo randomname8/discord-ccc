@@ -33,10 +33,10 @@ object ChatTreeItems {
   case class ChannelNode(channel: Channel) extends TreeItem[Any](channel) {
     val unreadEvents = new SimpleBooleanProperty(this, "newMessagesAvailable", false)
     override def toString = s"ChannelNode($channel)"
+    override def isLeaf = true
   }
   
   case class ServerNode(server: Server) extends TreeItem[Any](server) with ChannelGroup {
-    server.channels foreach (c => channelModified(c, true))
     override def toString = s"ServerNode($server)"
   }
 //  implicit def serverNode2Server(n: ServerNode) = n.server
