@@ -8,18 +8,15 @@ scalacOptions ++= Seq("-deprecation", "-unchecked", "-feature", "-Yno-adapted-ar
 scalacOptions in (Compile, console) --= Seq("-Ywarn-unused:_", "-opt:_", "-Xlint")
 
 lazy val ccc = RootProject(file("../ccc"))
-lazy val root = Project("ccc-discord", file(".")).enablePlugins(DeployerPlugin).dependsOn(ccc)
+lazy val headache = RootProject(file("../headache"))
+lazy val root = Project("ccc-discord", file(".")).enablePlugins(DeployerPlugin).dependsOn(ccc, headache)
 
 libraryDependencies ++= Seq(
-  "org.asynchttpclient" % "async-http-client" % "2.0.33",
   "com.beachape" %% "enumeratum" % "1.5.12",
-  "com.github.benhutchison" %% "prickle" % "1.1.14",
-  "com.typesafe.play" %% "play-json" % "2.6.7",
-  //"io.circe" %% "circe-derivation" % "0.9.0-M3",
-  "org.json4s" %% "json4s-native" % "3.5.2",
   "org.scala-stm" %% "scala-stm" % "0.8",
   "org.slf4j" % "slf4j-simple" % "1.7.25",
   "com.twitter" %% "chill" % "0.9.1",
+  "io.dropwizard.metrics" % "metrics-core" % "3.1.0",
   "org.scalatest" %% "scalatest" % "3.0.5" % "test",
   "org.openjdk.jol" % "jol-core" % "0.9" % "test",
 )

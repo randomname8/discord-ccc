@@ -1,14 +1,14 @@
 package discordccc
 
 import java.time.Instant
-import scala.collection.mutable.Buffer
 
-case class Server(val id: String, var name: String, var description: String, var location: String, var imageUrl: Option[String], val channels: Buffer[Channel])
-case class User(id: String, name: String, bot: Boolean, extra: String, imageUrl: Option[String])
-case class Channel(val id: String, val serverId: String, var name: String, var topic: String, val members: Buffer[Member], var canTalk: Boolean)
-case class Member(val userId: String, val serverId: String, var nickname: String, val roles: Buffer[String], var color: Int, val isOwner: Boolean)
+case class Server(id: String, name: String, description: String, location: String, imageUrl: Option[String])
+case class User(id: String, name: String, bot: Boolean, extra: String, imageUrl: Option[String], friend: Boolean)
+case class Channel(id: String, serverId: Option[String], name: String, topic: String,
+                   canTalk: Boolean, canRead: Boolean, canSubscibe: Boolean, dmUserId: Option[String])
+case class Member(userId: String, serverId: String, nickname: String, roles: Seq[String], color: Int, isOwner: Boolean)
 case class Message(id: String, content: Seq[Content], created: Instant, edited: Option[Instant], attachments: Seq[Message.Attachment],
-                   channelId: String, serverId: String) {
+                   channelId: String, serverId: String, author: Member) {
   def originalContent = content.map(_.originalText).mkString
 }
 object Message {

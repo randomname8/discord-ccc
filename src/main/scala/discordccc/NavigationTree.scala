@@ -21,7 +21,7 @@ trait NavigationTree { self: DiscordChat =>
 //    discordClient.getPrivateChannels forEach (channel => dmsNode.textChannelModified(channel, true))
 //    discordClient.getGuilds forEach (g => entries add GuildNode(g))
     
-    navigationTree setCellFactory { _ => new ServersAccessTreeCell(imagesCache, _ => null, emojis("👑").get) }
+    navigationTree setCellFactory { _ => new ServersAccessTreeCell(imagesCache, null, _ => null, emojis("👑").get) }
     
     navigationTree.getSelectionModel.selectedItemProperty foreach (item => if (item != null) item match {
         case ChannelNode(channel) => selectedMessageChannel set channel
