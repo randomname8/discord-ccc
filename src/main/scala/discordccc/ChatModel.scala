@@ -41,14 +41,4 @@ trait ChatModel {
    * Signals switching the passed channel. This allows for a caching mechanism on messages.
    */
   def switchToChannel(channel: Channel): Unit
-  /**
-   * Fetches the latest messages for a given channel, the returned list is ordered from oldest to newest but fromIndex represents the newest
-   * offset, and upTo means how far back to go.
-   * 
-   * ----------------------------------------------
-   * |                        |        |          |
-   * ----------------------------------------------
-   * oldest                  upTo    fromIndex    newest
-   */
-  def getLatestMessagesForChannel(channel: Channel, fromIndex: Int = 0, upTo: Int = 100): Seq[Message]
 }

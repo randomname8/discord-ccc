@@ -1,7 +1,7 @@
 package discordccc
 
 import better.files._
-import ccc._
+import ccc._, ccc.util._
 import java.time.{LocalDateTime, ZoneId}
 import javafx.application.Application
 import javafx.beans.property.SimpleObjectProperty
@@ -20,9 +20,9 @@ class DiscordChat extends BaseApplication with NavigationTree {
   val emojioneDir = (rootUserDataDirectory/"emojione").createDirectories()
   val ahc = new DefaultAsyncHttpClient(new DefaultAsyncHttpClientConfig.Builder().setWebSocketMaxFrameSize(1024*1024).build())
   
-  val emojis = util.EmojiOne.emojiLookup.map(e => e._1 -> new util.WeakImage(s"file:${emojioneDir}/${e._2.filename}.png"))
-  val imagesCache: collection.mutable.Map[String, util.WeakImage] = new util.LruMap[String, util.WeakImage](100).withDefault { k => // cache the most recent images shown in the chat
-    val res = new util.WeakImage(k)
+  val emojis = EmojiOne.emojiLookup.map(e => e._1 -> new WeakImage(s"file:${emojioneDir}/${e._2.filename}.png"))
+  val imagesCache: collection.mutable.Map[String, WeakImage] = new util.LruMap[String, WeakImage](100).withDefault { k => // cache the most recent images shown in the chat
+    val res = new WeakImage(k)
     imagesCache(k) = res
     res
   }
@@ -45,7 +45,7 @@ class DiscordChat extends BaseApplication with NavigationTree {
   
   override def extraInitialize(stage: Stage) = {
     sys.props("org.slf4j.simpleLogger.defaultLogLevel") = "debug"
-    if (emojioneDir.isEmpty() || { val subFiles = emojioneDir.list.map(_.nameWithoutExtension).toArray; !util.EmojiOne.allEmojis.forall(e => subFiles.contains(e.filename))}) {
+    if (emojioneDir.isEmpty() || { val subFiles = emojioneDir.list.map(_.nameWithoutExtension).toArray; !EmojiOne.allEmojis.forall(e => subFiles.contains(e.filename))}) {
       EmojiOneRetriever.downloadEmojiOne(ahc, emojioneDir)
     }
     stage.getScene.getStylesheets.addAll("/ccc-theme.css")

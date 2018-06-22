@@ -1,11 +1,11 @@
 package discordccc
 
-import ccc._
+import ccc._, ccc.util._
 import javafx.scene.Node
 import javafx.scene.layout.Region
 import javafx.scene.text.Font
 
-class AdditionalMessageRenderer(imageCache: collection.Map[String, util.WeakImage],
+class AdditionalMessageRenderer(imageCache: collection.Map[String, WeakImage],
                                 nodeFactory: DiscordMarkdownRenderer) extends ((Message, MarkdownRenderer.RenderContext) => Seq[Node]) {
 
   override def apply(message: Message, context: MarkdownRenderer.RenderContext) = {
@@ -17,7 +17,7 @@ class AdditionalMessageRenderer(imageCache: collection.Map[String, util.WeakImag
         val mediaPlayer = context.mediaPlayerProvider()
         mediaPlayer.setMaxHeight(Font.getDefault.getSize * 3)
         mediaPlayer.content set new Region().modify(_ setStyle "-fx-background-color: black")
-        util.JfxUtils.showingProperty(mediaPlayer) foreach (showing => if (showing) {
+        JfxUtils.showingProperty(mediaPlayer) foreach (showing => if (showing) {
             mediaPlayer.applyCss()
             mediaPlayer.getSkin.getNode.lookup(".media-overlay").visibleProperty.unbind()
             mediaPlayer.setMedia(url, None)

@@ -8,7 +8,7 @@ case class Channel(id: String, serverId: Option[String], name: String, topic: St
                    canTalk: Boolean, canRead: Boolean, canSubscibe: Boolean, dmUserId: Option[String])
 case class Member(userId: String, serverId: String, nickname: String, roles: Seq[String], color: Int, isOwner: Boolean)
 case class Message(id: String, content: Seq[Content], created: Instant, edited: Option[Instant], attachments: Seq[Message.Attachment],
-                   channelId: String, serverId: String, author: Member) {
+                   channelId: String, serverId: String, authorId: String) {
   def originalContent = content.map(_.originalText).mkString
 }
 object Message {
