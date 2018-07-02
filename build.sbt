@@ -10,6 +10,7 @@ scalacOptions in (Compile, console) --= Seq("-Ywarn-unused:_", "-opt:_", "-Xlint
 lazy val ccc = RootProject(file("../ccc"))
 lazy val headache = RootProject(file("../headache"))
 lazy val root = Project("ccc-discord", file(".")).enablePlugins(DeployerPlugin).dependsOn(ccc, headache)
+lazy val jmh = Project("ccc-discord-jmh", file("jmh")).dependsOn(root).enablePlugins(JmhPlugin)
 
 libraryDependencies ++= Seq(
   "com.beachape" %% "enumeratum" % "1.5.12",

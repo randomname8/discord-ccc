@@ -1,9 +1,11 @@
 package discordccc
 
 import ccc._
+import discordccc.model._
 import javafx.scene.control.TreeItem
 import scala.collection.JavaConverters._
 import ChatTreeItems._
+import scala.concurrent.{Future, ExecutionContext}
 
 trait NavigationTree { self: DiscordChat =>
   
@@ -21,7 +23,20 @@ trait NavigationTree { self: DiscordChat =>
 //    discordClient.getPrivateChannels forEach (channel => dmsNode.textChannelModified(channel, true))
 //    discordClient.getGuilds forEach (g => entries add GuildNode(g))
     
-    navigationTree setCellFactory { _ => new ServersAccessTreeCell(imagesCache, null, _ => null, emojis("👑").get) }
+    val membersFetcher: Channel => Iterator[Either[User, Member]] = {
+      case channel if channel.serverId.isEmpty => 
+//        println("Finding members of DM channel " + channel + " with " + chatModel.getChannelUsersCount(channel.id, channel.connector) + " members")
+        chatModel.getChannelUsers(channel.id, channel.connector).map(Left.apply)
+      case channel => 
+//        println("Finding members of channel " + channel + " with " + chatModel.getServerMembersCount(channel.serverId.get, channel.connector) + " members")
+          val server = chatModel.getServer(channel.serverId.get, channel.connector).get
+          val connector = channel.connector
+          val members = chatModel.getServerMembers(channel.serverId.get, channel.connector) //.filter(_.channels.contains(channel.id)).map(Right.apply)
+          members.filter(m => connector.canRead(m, channel, server)).map(Right.apply)
+    }
+      
+    navigationTree setCellFactory { _ => new ServersAccessTreeCell(imagesCache, membersFetcher, (id, channel) => 
+        chatModel.getUser(id, channel.connector).getOrElse(User(0, "Unk.", false, s"Member $id not found", None, false, null, null)), emojis("👑").get) }
     
     navigationTree.getSelectionModel.selectedItemProperty foreach (item => if (item != null) item match {
         case ChannelNode(channel) => selectedMessageChannel set channel

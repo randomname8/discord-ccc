@@ -1,18 +1,28 @@
 package discordccc
 
 import better.files._
-import headache.GatewayOp
-import headache.{DiscordClient, GatewayEvents, JsonUtils}, GatewayEvents._, JsonUtils.DynJValueSelector
+import discordccc.model._, ConnectorRegistry.DiscordConnector
+import headache.{
+  DiscordClient,
+  GatewayOp,
+  GatewayEvents,
+  JsonUtils,
+  Permissions,
+}, GatewayEvents._, JsonUtils.DynJValueSelector
+import java.util.concurrent.Executors
 import javafx.application.Platform
-import scala.collection.mutable.Buffer
+import scala.concurrent._, duration._, ExecutionContext.Implicits._
 
 class DiscordEventHandler(ui: DiscordChat) extends DiscordClient.DiscordListener {
 
-  val logFile = File("messagesLog.json")
-  logFile.clear()
+  var readyEvent: Ready = _
+//  val logFile = File("messagesLog.json")
+//  logFile.clear()
+
+//  implicit val eventsProcessor = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor(r => new Thread(r, "chunks processor")))
   
   override def onGatewayOp(conn: DiscordClient#GatewayConnection, op: GatewayOp, data: => DynJValueSelector): Unit = {
-    logFile.append(JsonUtils.renderJson(data.jv.get, true) + "\n")
+//    logFile.append(JsonUtils.renderJson(data.jv.get, true) + "\n")
   }
   override def onUnexpectedGatewayOp(conn: DiscordClient#GatewayConnection, op: Int, data: => DynJValueSelector): Unit = {
     println(s"Received unexpected $op " + JsonUtils.renderJson(data.jv.get, true) + "\n")
@@ -25,40 +35,75 @@ class DiscordEventHandler(ui: DiscordChat) extends DiscordClient.DiscordListener
   override def onConnectionError(conn: DiscordClient#Connection, error: Throwable): Unit = println(s"Connection $conn failed $error\n" + error.getStackTrace.mkString("  ", "\n  ", ""))
   override def onGatewayEvent(conn: DiscordClient#GatewayConnection): GatewayEvent => Any = {
     case ge@ReadyEvent(evt) =>
+      readyEvent = evt
 //      logFile append Json4sUtils.renderJson(ge.payload().d.jv.get, true)
-      evt.guilds foreach {
-        case Right(guild) => println(s"Guild ${guild.name}: ${guild.memberCount}")
-        case _ =>
-      }
-//      println("User " + evt.user + "\nsettings " + evt.userSettings)
+      val guilds = evt.guilds.collect { case Right(g) => g }
+      guilds foreach (guild => println(s"Guild ${guild.name}: ${guild.memberCount}"))
       Platform.runLater { () =>
-        val channels = evt.privateChannels
-        channels.filter(_.tpe == headache.Channel.Type.Dm) foreach (c => ui.dmChannelModified(mapChannel("dm" + c.id)(c), true))
-        channels.filter(_.tpe == headache.Channel.Type.GroupDm) foreach (c => ui.dmChannelModified(mapChannel("gdm" + c.id)(c), true))
-        println("DMs/GroupDms added: " + channels.mkString("\n"))
-        evt.guilds foreach {
-          case Right(guild) => addGuild(guild)
-          case _ =>
-        }
+        evt.privateChannels foreach (c => addChannel(c, None, true, true))
+        guilds foreach addGuild
       }
+      guilds foreach (g => conn.sendRequestGuildMembers(g.id))
       
     case GuildCreateEvent(evt) => Platform.runLater { () => addGuild(evt.guild) }
       
+    case ge@GatewayEvent(EventType.GuildMemberChunk, _) => Future { //parse the message in a different thread from the websocket
+        val GuildMemberChunkEvent(evt) = ge
+        
+        val server: Server = ui.chatModel.getServer(evt.guildId, DiscordConnector).get
+        
+        for (m <- evt.members) {
+          ui.chatModel.putMember(DiscordConnector.mapMember(m, server))
+          ui.chatModel.putUser(DiscordConnector.mapUser(m.user))
+        }
+        println(s"Processed ${ui.chatModel.getServerMembersCount(server.id, DiscordConnector)} members for guild ${server.name}")
+      }
+      
     case MessageCreateEvent(msg) => 
-      println(msg)
+//      println(msg)
       
     case _ =>
   }
   
-  private val discordCdn = "https://cdn.discordapp.com"
   private def addGuild(guild: Guild): Unit = {
-    val serverId = guild.id.snowflakeString
-    val server = Server(serverId, guild.name, s"guild - ${guild.memberCount} members", guild.region,
-                        guild.icon.map(icon => s"$discordCdn/icons/${serverId}/$icon.png"))
+    val server = DiscordConnector.mapServer(guild)
+    ui.chatModel.putServer(server)
     ui.addServer(server)
+
+    val myUserAsMember = DiscordConnector.mapMember(guild.members.find(_.user.id == readyEvent.user.id).get, server)
+    
+    guild.channels foreach { c =>
+      val mappedChannel = {
+        val res = DiscordConnector.mapChannel(c, Some(server), false, false)
+        val perms = DiscordConnector.calculatePermission(myUserAsMember, res, server)
+        res.copy(canRead = Permissions.ViewChannels existsIn perms, canTalk = Permissions.SendMessages existsIn perms)
+      }
+      
+      ui.chatModel.putChannel(mappedChannel)
+      ui.channelModifiedInServer(mappedChannel, server, true)
+    }
+    
+    //if we have members already (for whatever reason) add them
+      
+    for (m <- guild.members) {
+      ui.chatModel.putMember(DiscordConnector.mapMember(m, server))
+      ui.chatModel.putUser(DiscordConnector.mapUser(m.user))
+    }
   }
-  private def mapChannel(serverId: String)(c: headache.Channel): Channel = {
-    val name = c.name.getOrElse(c.recipients.map(_.userName).mkString(", ")) //if it has no name, it's probably a DM or group DM channel, so use the name of the participants
-    Channel(c.id.snowflakeString, Some(serverId), name, c.topic.getOrElse(""), true, true, true, None)
+  private def addChannel(c: headache.Channel, server: Option[Server], canRead: Boolean, canWrite: Boolean): Unit = {
+    val chatChannel = DiscordConnector.mapChannel(c, server, canRead, canWrite)
+    ui.chatModel.putChannel(chatChannel)
+    c.tpe match {
+      case headache.Channel.Type.Dm => ui.dmChannelModified(chatChannel, true)
+      case headache.Channel.Type.GroupDm => ui.groupChannelModified(chatChannel, true)
+      case headache.Channel.Type.GuildText => ui.channelModifiedInServer(chatChannel, server.get, true)
+      case headache.Channel.Type.GuildCategory =>
+      case headache.Channel.Type.GuildVoice =>
+    }
+    val users = c.recipients.map(DiscordConnector.mapUser)
+    users foreach { u =>
+      ui.chatModel.putUser(u)
+      ui.chatModel.registerChannelUser(c.id, u.id, DiscordConnector)
+    }
   }
 }

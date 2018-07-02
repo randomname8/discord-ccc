@@ -2,6 +2,7 @@ package discordccc
 
 import better.files._
 import ccc._, ccc.util._
+import discordccc.model._
 import java.time.{LocalDateTime, ZoneId}
 import javafx.application.Application
 import javafx.beans.property.SimpleObjectProperty
@@ -27,6 +28,9 @@ class DiscordChat extends BaseApplication with NavigationTree {
     res
   }
   val markdownRenderer = new DiscordMarkdownRenderer(getHostServices, imagesCache)
+  
+  val chatModel: ChatModel = new CompressingChatModel()
+  
   val chatList = new ChatList[Member, Message](getHostServices, markdownRenderer, emojis.mapValues(_.get),
                                                _.nickname,
                                                _.originalContent,

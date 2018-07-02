@@ -1,6 +1,7 @@
 package discordccc
 
 import ccc.Modifier
+import discordccc.model._
 import javafx.scene.Node
 import javafx.scene.control.Label
 

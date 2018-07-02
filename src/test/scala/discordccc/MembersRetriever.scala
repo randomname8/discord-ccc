@@ -3,6 +3,7 @@ package discordccc
 import better.files._
 import com.codahale.metrics.ConsoleReporter
 import com.codahale.metrics.MetricRegistry
+import discordccc.model._
 import headache._
 import scala.io.AnsiColor
 import scala.concurrent._, ExecutionContext.Implicits._
@@ -16,13 +17,17 @@ object MembersRetriever {
   def main(args: Array[String]): Unit = {
     val token = file"test-token".contentAsString()
     
+//    require(args.length == 1, "file argmuent required")
+//    val file = args(0).toFile
+    
     val model = new CompressingChatModel()
     val metrics = new MetricRegistry()
+    val memberMappingTimer = metrics.timer("member mapping time")
     val storeTimer = metrics.timer("store operation time")
     val usageMetric = metrics.histogram(s"bucket usage% ${model.statistics.members.usage.length} buckets")
     val entriesMetric = metrics.histogram(s"entries per bucket")
     val reporter = ConsoleReporter.forRegistry(metrics).build()
-    reporter.start(5, duration.SECONDS)
+    reporter.start(1, duration.SECONDS)
     
     val client = new DiscordClient(token, new DiscordClient.DiscordListener {
         def prettyPrint(js: DynJValueSelector) = JsonUtils.renderJson(js.jv.result.get, true)
@@ -53,34 +58,44 @@ object MembersRetriever {
         val totalUsers = new java.util.concurrent.atomic.AtomicInteger
         var ready: Ready = _
         override def onGatewayEvent(connection: DiscordClient#GatewayConnection) = {
-          case ReadyEvent(evt) =>
+          case ge@ReadyEvent(evt) =>
             ready = evt
             println(AnsiColor.YELLOW + evt + AnsiColor.RESET)
+//            file.append(prettyPrint(ge.payload()))
+            println("ready event fetched")
             val guilds = evt.guilds.collect { case Right(g) => g }
             println(System.currentTimeMillis + " requesting guilds " + guilds.map(_.name).mkString(", "))
-            guilds foreach (g => connection.sendRequestGuildMembers(g.id, "", 0))
+            guilds foreach { g =>
+              model.putServer(ConnectorRegistry.DiscordConnector.mapServer(g))
+              connection.sendRequestGuildMembers(g.id, "", 0)
+            }
             
           case GuildCreateEvent(evt) => 
             println(AnsiColor.YELLOW + evt + AnsiColor.RESET)
             println("requesting guilds " + evt.guild.name)
             connection.sendRequestGuildMembers(evt.guild.id, "", 0)
             
-          case GuildMemberChunkEvent(evt) =>
-            val totalAsOfNow = totalUsers.addAndGet(evt.members.size)
-            println(System.currentTimeMillis + " " + evt.members.size + " members received for guild " + evt.guildId.snowflakeString + " total " + totalAsOfNow)
-            val members = evt.members.map(m => Member(m.user.id.snowflakeString, evt.guildId.snowflakeString, m.nick.getOrElse(""), m.roles.map(_.snowflakeString), 0, false))
-            
-            val guildName = ready.guilds.collectFirst { case Right(g) if g.id == evt.guildId => g.name.replace("/", "⁄") }.head
-            
-            members foreach (m => storeTimer.time(() => model.putMember(m)))
-            println(s"Processed ${members.length} members from guild $guildName")
-            
-            val stats = model.statistics()
-            stats.members.usage foreach (u => usageMetric.update((u * 100).toInt))
-            stats.members.entriesPerBucket foreach entriesMetric.update
-            println("Overrun buckets: " + stats.members.overrunBuckets)
-            println(f"Cache hits: ${stats.members.cacheHits}, misses: ${stats.members.cacheMisses}, ratio ${stats.members.cacheHits.toDouble / stats.members.cacheMisses}")
-            
+          case ge@GatewayEvent(EventType.GuildMemberChunk, _) => Future {
+              val GuildMemberChunkEvent(evt) = ge
+              val totalAsOfNow = totalUsers.addAndGet(evt.members.size)
+              println(System.currentTimeMillis + " " + evt.members.size + " members received for guild " + evt.guildId.snowflakeString + " total " + totalAsOfNow)
+              
+              val server = model.getServer(evt.guildId, ConnectorRegistry.DiscordConnector).get
+              evt.members foreach { m =>
+                val member = memberMappingTimer.time(() => ConnectorRegistry.DiscordConnector.mapMember(m, server))
+                storeTimer.time(() => model.putMember(member))
+              }
+              
+              val guildName = ready.guilds.collectFirst { case Right(g) if g.id == evt.guildId => g.name.replace("/", "⁄") }.head
+              
+              println(s"Processed ${evt.members.length} members from guild $guildName")
+              
+              val stats = model.statistics()
+              stats.members.usage foreach (u => usageMetric.update((u * 100).toInt))
+              stats.members.entriesPerBucket foreach entriesMetric.update
+              println("Overrun buckets: " + stats.members.overrunBuckets)
+              println(f"Cache hits: ${stats.members.cacheHits}, misses: ${stats.members.cacheMisses}, ratio ${stats.members.cacheHits.toDouble / stats.members.cacheMisses}")
+            }
           case _ =>
         }
       })

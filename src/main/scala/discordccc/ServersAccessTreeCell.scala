@@ -1,6 +1,7 @@
 package discordccc
 
-import ccc._
+import ccc._, ccc.util._
+import discordccc.model._
 import javafx.scene.Node
 import javafx.scene.control.skin.VirtualFlow
 import javafx.scene.control.{Label, TreeCell, ListView, ListCell, TreeItem, TitledPane, ProgressIndicator}
@@ -10,21 +11,20 @@ import javafx.scene.image.{Image, ImageView}
 import javafx.scene.layout.StackPane
 import javafx.scene.paint.Color
 import javafx.scene.text.Font
-import scala.concurrent.Future
+import scala.collection.JavaConverters._
 import ChatTreeItems._
 
 object ServersAccessTreeCell {
   val textLabelFont = Font.font(Font.getDefault.getName, Font.getDefault.getSize * 1.5)
   val unreadableChannelColor = Color.RED
   val defaultAvatarUrl = "https://discordapp.com/assets/dd4dbc0016779df1378e7812eabaa04d.png"
-  type ChannelId = String
-  type UserId = String
+  type UserId = Long
 }
 import ServersAccessTreeCell._
 class ServersAccessTreeCell(
-  val imagesCache: collection.Map[String, util.WeakImage],
-  val membersFetcher: ChannelId => Future[Seq[Either[User, Member]]],
-  val usersLookup: UserId => User,
+  val imagesCache: collection.Map[String, WeakImage],
+  val membersFetcher: Channel => Iterator[Either[User, Member]],
+  val usersLookup: (UserId, Channel) => User,
   val guildOwnerIcon: Image) extends TreeCell[Any] {
   
   
@@ -88,9 +88,8 @@ class ServersAccessTreeCell(
               res.setExpanded(!res.isExpanded)
               res.setContent(null)
               if (res.isExpanded) {
-                res.setContent(new ProgressIndicator())
-                import JavafxExecutionContext.context
-                membersFetcher(channel.id).foreach(users => res.setContent(new MembersList(users)))
+                
+                res.setContent(new MembersList(channel, membersFetcher(channel)))
               }
             }
           }
@@ -106,7 +105,7 @@ class ServersAccessTreeCell(
           }
           
         case node @ ChannelNode(channel) =>
-          val user = usersLookup(channel.dmUserId.get)
+          val user = usersLookup(channel.dmUserId.get, channel)
           val icon = user.imageUrl.map(icon => imageIcon(imagesCache(icon).get)).getOrElse(new Label(user.name.charAt(0).toUpper.toString))
           setGraphic(entry(icon, channel.name, if (user.friend) "Friend" else "DM"))
           
@@ -118,34 +117,50 @@ class ServersAccessTreeCell(
   }
   
   
-  class MembersList(members: Seq[Either[User, Member]]) extends ListView[Either[User, Member]] {
+  private sealed trait ListEntry
+  private case class MemberListEntry(member: Either[User, Member]) extends ListEntry
+  private case object LoadMoreListEntry extends ListEntry
+  private class MembersList(channel: Channel, membersIterator: Iterator[Either[User, Member]]) extends ListView[ListEntry] {
     getStyleClass.add("discord-text-channel-members")
-    getItems.addAll(members:_*)
     
-    setCellFactory(_ => new ListCell[Either[User, Member]] {
-        override protected def updateItem(item: Either[User, Member], empty: Boolean): Unit = {
+    def addMoreEntries(): Unit = {
+      val items = getItems
+      items.asScala.lastOption.filter(LoadMoreListEntry.==) foreach items.remove 
+      var i = -1
+      while ({i += 1; i < 50 && membersIterator.hasNext}) items.add(MemberListEntry(membersIterator.next))
+      if (i == 50) items.add(LoadMoreListEntry)
+    }
+    addMoreEntries()
+    
+    setCellFactory(_ => new ListCell[ListEntry] {
+        override protected def updateItem(item: ListEntry, empty: Boolean): Unit = {
           super.updateItem(item, empty)
     
           if (item != null && !empty) {
-            val user = item.fold(identity, m => usersLookup(m.userId))
-            val name = item.fold(_.name, _.nickname)
-            val color = item.right.toOption.flatMap(m => Option(m.color).filter(_ != 0).map(c => Color.rgb((c >>> 16) & 0xff, (c >>> 8) & 0xff, c & 0xff)))
+            item match {
+              case MemberListEntry(item) =>
+                val user = item.fold(identity, m => usersLookup(m.userId, channel))
+                val name = item.fold(_.name, _.nickname)
+                val color = item.right.toOption.flatMap(m => Option(m.color).filter(_ != 0).map(c => Color.rgb((c >>> 16) & 0xff, (c >>> 8) & 0xff, c & 0xff)))
             
-            val res = entry(imageIcon(imagesCache(user.imageUrl.getOrElse(defaultAvatarUrl)).get),
-                            name, if (user.bot) "BOT" else user.name + "#" + user.extra, color.orNull)
+                val res = entry(imageIcon(imagesCache(user.imageUrl.getOrElse(defaultAvatarUrl)).get),
+                                name, if (user.bot) "BOT" else user.name + "#" + user.extra, color.orNull)
 
-            if (item.right.map(_.isOwner) getOrElse false)
-              res.getChildren add new ImageView(guildOwnerIcon).modify(_ setPreserveRatio true, _ setFitWidth textLabelFont.getSize)
+                if (item.right.map(_.isOwner) getOrElse false)
+                  res.getChildren add new ImageView(guildOwnerIcon).modify(_ setPreserveRatio true, _ setFitWidth textLabelFont.getSize)
 
-            setGraphic(res)
+                setGraphic(res)
+              
+              case LoadMoreListEntry =>
+                setGraphic(null)
+                println("found load more token, loading more")
+                addMoreEntries()
+                
+            }
           } else {
             setGraphic(null)
           }
         }
-      })
-    if (members.size < 4) ccc.util.JfxUtils.showingProperty(this).foreach(showing => if (showing) {
-        applyCss()
-        this.lookup(".virtual-flow").asInstanceOf[VirtualFlow[_]].setCellCount(members.size)
       })
   }
   

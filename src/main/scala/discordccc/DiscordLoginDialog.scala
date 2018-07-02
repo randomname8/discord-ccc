@@ -29,7 +29,8 @@ class DiscordLoginDialog(ahc: AsyncHttpClient, listener: headache.DiscordClient.
         loginButton setDisable true
         loadingIndicator setVisible true
         
-        val client = new headache.DiscordClient(tokenTextField.getText, listener, ahc)
+        val identity = headache.DiscordClient.ClientIdentity("Windows", "strife v1.0", "strifewhat d")
+        val client = new headache.DiscordClient(tokenTextField.getText, listener, ahc, clientIdentity = identity)
         client.login(Some(1)) onComplete { result =>
           loadingIndicator setVisible false
           result.fold(ex => {

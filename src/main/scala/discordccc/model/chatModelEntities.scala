@@ -1,14 +1,17 @@
-package discordccc
+package discordccc.model
 
 import java.time.Instant
 
-case class Server(id: String, name: String, description: String, location: String, imageUrl: Option[String])
-case class User(id: String, name: String, bot: Boolean, extra: String, imageUrl: Option[String], friend: Boolean)
-case class Channel(id: String, serverId: Option[String], name: String, topic: String,
-                   canTalk: Boolean, canRead: Boolean, canSubscibe: Boolean, dmUserId: Option[String])
-case class Member(userId: String, serverId: String, nickname: String, roles: Seq[String], color: Int, isOwner: Boolean)
-case class Message(id: String, content: Seq[Content], created: Instant, edited: Option[Instant], attachments: Seq[Message.Attachment],
-                   channelId: String, serverId: String, authorId: String) {
+case class Server(id: Long, name: String, description: String, location: String, imageUrl: Option[String], connector: Connector,
+                  metadata: Any) extends ConnectorEntity
+case class User(id: Long, name: String, bot: Boolean, extra: String, imageUrl: Option[String], friend: Boolean, connector: Connector,
+                metadata: Any) extends ConnectorEntity
+case class Channel(id: Long, serverId: Option[Long], name: String, topic: String, canTalk: Boolean, canRead: Boolean,
+                   canSubscribe: Boolean, dmUserId: Option[Long], connector: Connector, metadata: Any) extends ConnectorEntity
+case class Member(userId: Long, serverId: Long, nickname: String, roles: Seq[String], color: Int, isOwner: Boolean,
+                  connector: Connector, metadata: Any) extends ConnectorEntity
+case class Message(id: Long, content: Seq[Content], created: Instant, edited: Option[Instant], attachments: Seq[Message.Attachment],
+                   channelId: Long, serverId: Long, authorId: Long, connector: Connector, metadata: Any) extends ConnectorEntity {
   def originalContent = content.map(_.originalText).mkString
 }
 object Message {
@@ -49,3 +52,4 @@ object Content {
   }
   case class Field(name: String, value: Content, inline: Boolean)
 }
+

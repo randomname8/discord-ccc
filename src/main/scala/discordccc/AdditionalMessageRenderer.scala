@@ -1,6 +1,7 @@
 package discordccc
 
 import ccc._, ccc.util._
+import discordccc.model._
 import javafx.scene.Node
 import javafx.scene.layout.Region
 import javafx.scene.text.Font

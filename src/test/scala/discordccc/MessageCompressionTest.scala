@@ -1,9 +1,8 @@
 package discordccc
 
-import scala.language.reflectiveCalls
 import better.files._
-import com.twitter.chill.ScalaKryoInstantiator
-import headache._
+import discordccc.model._
+import headache.{Message => _, _}
 import headache.rest.BackPressureStrategy
 import scala.io.AnsiColor
 import scala.concurrent._, ExecutionContext.Implicits._
@@ -17,7 +16,7 @@ object MessageCompressionTest {
   def main(args: Array[String]): Unit = {
     val token = file"test-token".contentAsString()
     
-    val store = new util.MessageStorage(new ScalaKryoInstantiator().newKryo, 100)
+    val store = new util.CompressedSequentialStorage[Message](new util.KryoPool(8, util.CustomKryoInstantiator, 600, 1024*10), 100)
     
     val client = new DiscordClient(token, new DiscordClient.DiscordListener {
         def prettyPrint(js: DynJValueSelector) = JsonUtils.renderJson(js.jv.result.get, true)
@@ -62,16 +61,16 @@ object MessageCompressionTest {
                 println(s"Fetched page $pageNumber starting at ${before.snowflakeString}")
                 
                 val newMessages = messages map (m => Message(
-                    m.id.snowflakeString, Seq(Content.Text(m.content)), m.timestamp, None, Seq.empty, channel.id.snowflakeString,
-                    selectedGuild.id.snowflakeString, m.author.id.snowflakeString))
+                    m.id, Seq(Content.Text(m.content)), m.timestamp, None, Seq.empty, channel.id,
+                    selectedGuild.id, m.author.id, ConnectorRegistry.DiscordConnector, null))
                   
-                newMessages foreach store.appendMessage
+                newMessages foreach store.append
                 val newAllMessages = allMessages ++ newMessages
                 
                 if (messages.isEmpty || pageNumber == 0 || before == messages.last.id) {
                   println(s"Total messages ${allMessages.size}")
-                  val uncompletedPageMethod = classOf[util.MessageStorage].getDeclaredField("uncompletedPage")
-                  val pagesMethod = classOf[util.MessageStorage].getDeclaredField("pages")
+                  val uncompletedPageMethod = classOf[util.CompressedSequentialStorage[_]].getDeclaredField("uncompletedPage")
+                  val pagesMethod = classOf[util.CompressedSequentialStorage[_]].getDeclaredField("pages")
                   uncompletedPageMethod.setAccessible(true)
                   pagesMethod.setAccessible(true)
                   

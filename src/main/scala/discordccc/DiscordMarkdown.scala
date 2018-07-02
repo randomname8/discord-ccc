@@ -1,5 +1,6 @@
 package discordccc
 
+import discordccc.model._
 
 object DiscordMarkdown {
 

@@ -1,5 +1,6 @@
 package discordccc
 
+import discordccc.model._
 import javafx.beans.Observable
 import javafx.beans.binding.BooleanBinding
 import javafx.beans.property.SimpleBooleanProperty
