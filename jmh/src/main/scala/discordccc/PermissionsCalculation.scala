@@ -48,7 +48,7 @@ class PermissionsCalculation {
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(MICROSECONDS)
-  @Fork(value = 1, jvmArgsAppend = Array("-XX:+UnlockExperimentalVMOptions", "-XX:+UseJVMCICompiler"))
+  @Fork(value = 1, jvmArgsAppend = Array("-XX:+UnlockExperimentalVMOptions", "-XX:+EnableJVMCI", "-XX:+UseJVMCICompiler", "-Djvmci.Compiler=graal"))
   def measurePermissionsCalculation() = {
     val memberRoles = member.roles.map(guildRoles.apply)
     
