@@ -1,9 +1,7 @@
 package discordccc
 package model
 
-import scala.collection.JavaConverters._
-
-class CompressingChatModel extends ChatModel {
+class CompressingChatModel extends ConnectorStore {
 
   val parallelismLevel = Runtime.getRuntime.availableProcessors
   val kryoPool = new util.KryoPool(parallelismLevel * 2, util.CustomKryoInstantiator, 1024*1024, 1024*1024)

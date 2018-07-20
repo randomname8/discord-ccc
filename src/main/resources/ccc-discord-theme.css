@@ -14,3 +14,27 @@
 .unread-events .label {
   -fx-font-weight: bold;
 }
+
+.rich-layout-content {
+  -fx-border-color: transparent lightgray lightgray lightgray, transparent;
+  -fx-border-insets: 1em, 0.15em;
+  -fx-border-width: 0.09em, 0.09em;
+  -fx-border-radius: 0 0 0.5em 0.5em, 0 0 0.5em 0.5em;
+  -fx-border-style: solid;
+}
+.rich-layout-content-author {
+  -fx-text-fill: black;
+  -fx-font-size: 0.7em;
+  -fx-font-weight: bold;
+  -fx-effect: dropshadow(two-pass-box, whitesmoke, 0.5em, 0.5, 0, 0);
+}
+.rich-layout-content-title {
+  -fx-text-fill: mediumaquamarine;
+  -fx-font-size: 1.2em;
+  -fx-font-weight: bold;
+}
+.rich-layout-content-field-key {
+  -fx-font-weight: bold;
+}
+.rich-layout-content-field-value {
+}

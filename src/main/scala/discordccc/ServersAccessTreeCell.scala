@@ -3,9 +3,9 @@ package discordccc
 import ccc._, ccc.util._
 import discordccc.model._
 import javafx.scene.Node
-import javafx.scene.control.skin.VirtualFlow
-import javafx.scene.control.{Label, TreeCell, ListView, ListCell, TreeItem, TitledPane, ProgressIndicator}
+import javafx.scene.control.{Label, TreeCell, ListView, ListCell, TreeItem, TitledPane}
 import javafx.beans.value.WeakChangeListener
+import javafx.collections.FXCollections
 import javafx.geometry.Pos
 import javafx.scene.image.{Image, ImageView}
 import javafx.scene.layout.StackPane
@@ -23,7 +23,7 @@ object ServersAccessTreeCell {
 import ServersAccessTreeCell._
 class ServersAccessTreeCell(
   val imagesCache: collection.Map[String, WeakImage],
-  val membersFetcher: Channel => Iterator[Either[User, Member]],
+  val membersFetcher: Channel => IndexedSeq[Member Either User],
   val usersLookup: (UserId, Channel) => User,
   val guildOwnerIcon: Image) extends TreeCell[Any] {
   
@@ -89,7 +89,10 @@ class ServersAccessTreeCell(
               res.setContent(null)
               if (res.isExpanded) {
                 
-                res.setContent(new MembersList(channel, membersFetcher(channel)))
+                val l0 = System.currentTimeMillis
+                val mmbrs = membersFetcher(channel)
+                println(s"Time fetching users ${System.currentTimeMillis - l0}ms")
+                res.setContent(new MembersList(channel, mmbrs))
               }
             }
           }
@@ -117,53 +120,37 @@ class ServersAccessTreeCell(
   }
   
   
-  private sealed trait ListEntry
-  private case class MemberListEntry(member: Either[User, Member]) extends ListEntry
-  private case object LoadMoreListEntry extends ListEntry
-  private class MembersList(channel: Channel, membersIterator: Iterator[Either[User, Member]]) extends ListView[ListEntry] {
+  private type ListEntry = Either[Member, User]
+//  private case class MemberListEntry(member: Either[User, Member]) extends ListEntry
+//  private case object LoadMoreListEntry extends ListEntry
+  private class MembersList(channel: Channel, members: IndexedSeq[Member Either User]) extends ListView[ListEntry] {
     getStyleClass.add("discord-text-channel-members")
+
+    setItems(FXCollections.observableList(members.asJava))
     
-    def addMoreEntries(): Unit = {
-      val items = getItems
-      items.asScala.lastOption.filter(LoadMoreListEntry.==) foreach items.remove 
-      var i = -1
-      while ({i += 1; i < 50 && membersIterator.hasNext}) items.add(MemberListEntry(membersIterator.next))
-      if (i == 50) items.add(LoadMoreListEntry)
-    }
-    addMoreEntries()
     
     setCellFactory(_ => new ListCell[ListEntry] {
         override protected def updateItem(item: ListEntry, empty: Boolean): Unit = {
           super.updateItem(item, empty)
     
           if (item != null && !empty) {
-            item match {
-              case MemberListEntry(item) =>
-                val user = item.fold(identity, m => usersLookup(m.userId, channel))
-                val name = item.fold(_.name, _.nickname)
-                val color = item.right.toOption.flatMap(m => Option(m.color).filter(_ != 0).map(c => Color.rgb((c >>> 16) & 0xff, (c >>> 8) & 0xff, c & 0xff)))
+            val user = item.fold(m => usersLookup(m.userId, channel), identity)
+            val name = item.fold(_.nickname, _.name)
+            val color = item.left.toOption.flatMap(m => Option(m.color).filter(_ != 0).map(c => Color.rgb((c >>> 16) & 0xff, (c >>> 8) & 0xff, c & 0xff)))
             
-                val res = entry(imageIcon(imagesCache(user.imageUrl.getOrElse(defaultAvatarUrl)).get),
-                                name, if (user.bot) "BOT" else user.name + "#" + user.extra, color.orNull)
+            val res = entry(imageIcon(imagesCache(user.imageUrl.getOrElse(defaultAvatarUrl)).get),
+                            name, if (user.bot) "BOT" else user.name + "#" + user.extra, color.orNull)
+            if (item.left.toOption.map(_.isOwner) getOrElse false)
+              res.getChildren add new ImageView(guildOwnerIcon).modify(_ setPreserveRatio true, _ setFitWidth textLabelFont.getSize)
 
-                if (item.right.map(_.isOwner) getOrElse false)
-                  res.getChildren add new ImageView(guildOwnerIcon).modify(_ setPreserveRatio true, _ setFitWidth textLabelFont.getSize)
-
-                setGraphic(res)
+            setGraphic(res)
               
-              case LoadMoreListEntry =>
-                setGraphic(null)
-                println("found load more token, loading more")
-                addMoreEntries()
-                
-            }
           } else {
             setGraphic(null)
           }
         }
       })
   }
-  
   
   private def imageIcon(icon: Image) = {
     new StackPane().modify(

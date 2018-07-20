@@ -19,8 +19,7 @@ object CompressionTest {
         scala.util.Random.alphanumeric.take(10).mkString,
         Some("http://" + scala.util.Random.alphanumeric.take(40).mkString),
         scala.util.Random.nextBoolean,
-        ConnectorRegistry.DiscordConnector,
-        ()))
+        null))
     
     val totalSizeJol = org.openjdk.jol.info.GraphLayout.parseInstance(users).toFootprint
     println(totalSizeJol)

@@ -2,16 +2,14 @@ package discordccc.model
 
 import java.time.Instant
 
-case class Server(id: Long, name: String, description: String, location: String, imageUrl: Option[String], connector: Connector,
-                  metadata: Any) extends ConnectorEntity
-case class User(id: Long, name: String, bot: Boolean, extra: String, imageUrl: Option[String], friend: Boolean, connector: Connector,
-                metadata: Any) extends ConnectorEntity
+case class Server(id: Long, name: String, description: String, location: String, imageUrl: Option[String], connector: Connector) extends ConnectorEntity
+case class User(id: Long, name: String, bot: Boolean, extra: String, imageUrl: Option[String], friend: Boolean, connector: Connector) extends ConnectorEntity
 case class Channel(id: Long, serverId: Option[Long], name: String, topic: String, canTalk: Boolean, canRead: Boolean,
-                   canSubscribe: Boolean, dmUserId: Option[Long], connector: Connector, metadata: Any) extends ConnectorEntity
+                   canSubscribe: Boolean, dmUserId: Option[Long], connector: Connector) extends ConnectorEntity
 case class Member(userId: Long, serverId: Long, nickname: String, roles: Seq[String], color: Int, isOwner: Boolean,
-                  connector: Connector, metadata: Any) extends ConnectorEntity
+                  connector: Connector) extends ConnectorEntity
 case class Message(id: Long, content: Seq[Content], created: Instant, edited: Option[Instant], attachments: Seq[Message.Attachment],
-                   channelId: Long, serverId: Long, authorId: Long, connector: Connector, metadata: Any) extends ConnectorEntity {
+                   channelId: Long, authorId: Long, connector: Connector) extends ConnectorEntity {
   def originalContent = content.map(_.originalText).mkString
 }
 object Message {
@@ -23,7 +21,7 @@ sealed trait Content {
 }
 object Content {
   case class Text(text: String) extends Content { override def originalText = text }
-  case class InlinedImage(name: String, url: String, originalText: String, isEmoji: Boolean) extends Content
+  case class InlinedImage(name: String, url: String, originalText: String, isEmoji: Boolean = false, width: Int = -1, height: Int = -1) extends Content
   case class InlinedMedia(name: String, url: String, originalText: String, isVideo: Boolean) extends Content
   case class RichLayout(title: Option[String] = None,
                         description: Option[Content] = None,

@@ -1,6 +1,7 @@
 package discordccc.util
 
 import better.files.InputStreamOps
+import ccc.util.LruMap
 import com.esotericsoftware.kryo.{Kryo, Serializer}
 import com.esotericsoftware.kryo.io.{Input, Output}
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}

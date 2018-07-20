@@ -9,7 +9,7 @@ import javafx.scene.paint.Color
 import org.asynchttpclient.AsyncHttpClient
 import JavafxExecutionContext.context
 
-class DiscordLoginDialog(ahc: AsyncHttpClient, listener: headache.DiscordClient.DiscordListener) extends Dialog[headache.DiscordClient] {
+class DiscordLoginDialog(ahc: AsyncHttpClient, listener: headache.DiscordClient.DiscordListener) extends Dialog[connector.DiscordConnector] {
   private val loginButtonType = new ButtonType("Login", ButtonBar.ButtonData.OK_DONE)
   getDialogPane.getButtonTypes.addAll(loginButtonType, ButtonType.CANCEL)
   
@@ -29,9 +29,8 @@ class DiscordLoginDialog(ahc: AsyncHttpClient, listener: headache.DiscordClient.
         loginButton setDisable true
         loadingIndicator setVisible true
         
-        val identity = headache.DiscordClient.ClientIdentity("Windows", "strife v1.0", "strifewhat d")
-        val client = new headache.DiscordClient(tokenTextField.getText, listener, ahc, clientIdentity = identity)
-        client.login(Some(1)) onComplete { result =>
+        val client = new connector.DiscordConnector(tokenTextField.getText, ahc)
+        client.init() onComplete { result =>
           loadingIndicator setVisible false
           result.fold(ex => {
               statusMessage setText ex.getMessage

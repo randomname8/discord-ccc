@@ -1,7 +1,7 @@
 package discordccc
 
 import better.files._
-import discordccc.model._, ConnectorRegistry.DiscordConnector
+import discordccc.model._
 import headache.{
   DiscordClient,
   GatewayOp,
@@ -50,13 +50,13 @@ class DiscordEventHandler(ui: DiscordChat) extends DiscordClient.DiscordListener
     case ge@GatewayEvent(EventType.GuildMemberChunk, _) => Future { //parse the message in a different thread from the websocket
         val GuildMemberChunkEvent(evt) = ge
         
-        val server: Server = ui.chatModel.getServer(evt.guildId, DiscordConnector).get
+        val server: Server = null //ui.chatModel.getServer(evt.guildId, DiscordConnector).get
         
         for (m <- evt.members) {
-          ui.chatModel.putMember(DiscordConnector.mapMember(m, server))
-          ui.chatModel.putUser(DiscordConnector.mapUser(m.user))
+//          ui.chatModel.putMember(DiscordConnector.mapMember(m, server))
+//          ui.chatModel.putUser(DiscordConnector.mapUser(m.user))
         }
-        println(s"Processed ${ui.chatModel.getServerMembersCount(server.id, DiscordConnector)} members for guild ${server.name}")
+//        println(s"Processed ${ui.chatModel.getServerMembersCount(server.id, DiscordConnector)} members for guild ${server.name}")
       }
       
     case MessageCreateEvent(msg) => 
@@ -66,44 +66,44 @@ class DiscordEventHandler(ui: DiscordChat) extends DiscordClient.DiscordListener
   }
   
   private def addGuild(guild: Guild): Unit = {
-    val server = DiscordConnector.mapServer(guild)
-    ui.chatModel.putServer(server)
-    ui.addServer(server)
+//    val server = DiscordConnector.mapServer(guild)
+//    ui.chatModel.putServer(server)
+//    ui.addServer(server)
 
-    val myUserAsMember = DiscordConnector.mapMember(guild.members.find(_.user.id == readyEvent.user.id).get, server)
+//    val myUserAsMember = DiscordConnector.mapMember(guild.members.find(_.user.id == readyEvent.user.id).get, server)
     
-    guild.channels foreach { c =>
-      val mappedChannel = {
-        val res = DiscordConnector.mapChannel(c, Some(server), false, false)
-        val perms = DiscordConnector.calculatePermission(myUserAsMember, res, server)
-        res.copy(canRead = Permissions.ViewChannels existsIn perms, canTalk = Permissions.SendMessages existsIn perms)
-      }
+//    guild.channels foreach { c =>
+//      val mappedChannel = {
+//        val res = DiscordConnector.mapChannel(c, Some(server), false, false)
+//        val perms = DiscordConnector.calculatePermission(myUserAsMember, res, server)
+//        res.copy(canRead = Permissions.ViewChannels existsIn perms, canTalk = Permissions.SendMessages existsIn perms)
+//      }
       
-      ui.chatModel.putChannel(mappedChannel)
-      ui.channelModifiedInServer(mappedChannel, server, true)
-    }
+//      ui.chatModel.putChannel(mappedChannel)
+//      ui.channelModifiedInServer(mappedChannel, server, true)
+//    }
     
     //if we have members already (for whatever reason) add them
       
-    for (m <- guild.members) {
-      ui.chatModel.putMember(DiscordConnector.mapMember(m, server))
-      ui.chatModel.putUser(DiscordConnector.mapUser(m.user))
-    }
+//    for (m <- guild.members) {
+//      ui.chatModel.putMember(DiscordConnector.mapMember(m, server))
+//      ui.chatModel.putUser(DiscordConnector.mapUser(m.user))
+//    }
   }
   private def addChannel(c: headache.Channel, server: Option[Server], canRead: Boolean, canWrite: Boolean): Unit = {
-    val chatChannel = DiscordConnector.mapChannel(c, server, canRead, canWrite)
-    ui.chatModel.putChannel(chatChannel)
-    c.tpe match {
-      case headache.Channel.Type.Dm => ui.dmChannelModified(chatChannel, true)
-      case headache.Channel.Type.GroupDm => ui.groupChannelModified(chatChannel, true)
-      case headache.Channel.Type.GuildText => ui.channelModifiedInServer(chatChannel, server.get, true)
-      case headache.Channel.Type.GuildCategory =>
-      case headache.Channel.Type.GuildVoice =>
-    }
-    val users = c.recipients.map(DiscordConnector.mapUser)
-    users foreach { u =>
-      ui.chatModel.putUser(u)
-      ui.chatModel.registerChannelUser(c.id, u.id, DiscordConnector)
-    }
+//    val chatChannel = DiscordConnector.mapChannel(c, server, canRead, canWrite)
+////    ui.chatModel.putChannel(chatChannel)
+//    c.tpe match {
+//      case headache.Channel.Type.Dm => ui.dmChannelModified(chatChannel, true)
+//      case headache.Channel.Type.GroupDm => ui.groupChannelModified(chatChannel, true)
+//      case headache.Channel.Type.GuildText => ui.channelModifiedInServer(chatChannel, server.get, true)
+//      case headache.Channel.Type.GuildCategory =>
+//      case headache.Channel.Type.GuildVoice =>
+//    }
+//    val users = c.recipients.map(DiscordConnector.mapUser)
+//    users foreach { u =>
+////      ui.chatModel.putUser(u)
+////      ui.chatModel.registerChannelUser(c.id, u.id, DiscordConnector)
+//    }
   }
 }

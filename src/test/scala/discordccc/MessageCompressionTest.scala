@@ -62,7 +62,7 @@ object MessageCompressionTest {
                 
                 val newMessages = messages map (m => Message(
                     m.id, Seq(Content.Text(m.content)), m.timestamp, None, Seq.empty, channel.id,
-                    selectedGuild.id, m.author.id, ConnectorRegistry.DiscordConnector, null))
+                    selectedGuild.id, m.author.id, null))
                   
                 newMessages foreach store.append
                 val newAllMessages = allMessages ++ newMessages

@@ -5,7 +5,6 @@ import discordccc.model._
 import javafx.scene.control.TreeItem
 import scala.collection.JavaConverters._
 import ChatTreeItems._
-import scala.concurrent.{Future, ExecutionContext}
 
 trait NavigationTree { self: DiscordChat =>
   
@@ -19,90 +18,16 @@ trait NavigationTree { self: DiscordChat =>
     val entries = root.getChildren
     entries add dmsNode
     entries add groupChatNode
-//    discordClient.asClient.getGroups forEach (group => groupChatNode.textChannelModified(group, true))
-//    discordClient.getPrivateChannels forEach (channel => dmsNode.textChannelModified(channel, true))
-//    discordClient.getGuilds forEach (g => entries add GuildNode(g))
     
-    val membersFetcher: Channel => Iterator[Either[User, Member]] = {
-      case channel if channel.serverId.isEmpty => 
-//        println("Finding members of DM channel " + channel + " with " + chatModel.getChannelUsersCount(channel.id, channel.connector) + " members")
-        chatModel.getChannelUsers(channel.id, channel.connector).map(Left.apply)
-      case channel => 
-//        println("Finding members of channel " + channel + " with " + chatModel.getServerMembersCount(channel.serverId.get, channel.connector) + " members")
-          val server = chatModel.getServer(channel.serverId.get, channel.connector).get
-          val connector = channel.connector
-          val members = chatModel.getServerMembers(channel.serverId.get, channel.connector) //.filter(_.channels.contains(channel.id)).map(Right.apply)
-          members.filter(m => connector.canRead(m, channel, server)).map(Right.apply)
-    }
-      
-    navigationTree setCellFactory { _ => new ServersAccessTreeCell(imagesCache, membersFetcher, (id, channel) => 
-        chatModel.getUser(id, channel.connector).getOrElse(User(0, "Unk.", false, s"Member $id not found", None, false, null, null)), emojis("👑").get) }
+    navigationTree setCellFactory { _ => new ServersAccessTreeCell(imagesCache, c => c.connector.getMembers(c), (id, channel) => channel.connector.getUser(id).getOrElse(
+        User(0, "Unk.", false, s"Member $id not found", None, false, null)), emojis("👑").get) }
     
     navigationTree.getSelectionModel.selectedItemProperty foreach (item => if (item != null) item match {
         case ChannelNode(channel) => selectedMessageChannel set channel
         case other =>
       }
     )
-    
-//   old code
-    { 
-  
-//    def findGuildNode(g: Guild) = navigationTree.getRoot.getChildren.asScala.collectFirst { case n@GuildNode(`g`) => n }
-//    discordClient.addEventListener(new EventListener {
-//        val removeFromParent: TreeItem[Any] => Unit = n => n.getParent.getChildren.remove(n)
-//    
-//        override def onEvent(event: Event): Unit = Platform.runLater { () =>
-//          event match {
-//            case evt: GuildJoinEvent => navigationTree.getRoot.getChildren add GuildNode(evt.getGuild)
-//            case evt: GuildLeaveEvent => findGuildNode(evt.getGuild) foreach removeFromParent
-//              
-//            case evt: TextChannelCreateEvent => findGuildNode(evt.getGuild) foreach (_.textChannelModified(evt.getChannel, true))
-//            case evt: TextChannelDeleteEvent => findGuildNode(evt.getGuild) foreach (_.textChannelModified(evt.getChannel, false))
-//              
-//            case evt: PrivateChannelCreateEvent => dmsNode.textChannelModified(evt.getPrivateChannel, true)
-//            case evt: PrivateChannelDeleteEvent => dmsNode.textChannelModified(evt.getPrivateChannel, false)
-//              
-//            case evt: GroupJoinEvent => groupChatNode.textChannelModified(evt.getGroup, true)
-//            case evt: GroupLeaveEvent => groupChatNode.textChannelModified(evt.getGroup, false)
-//              
-//            case evt: GenericMessageEvent =>
-//              if (selectedMessageChannel.get != evt.getChannel) {
-////                println("checking for unread events " + evt.getClass.getSimpleName + " - " + evt.getChannel)
-//                evt match {
-//                  case evt: GenericMessageEvent if evt.getChannelType == ChannelType.PRIVATE => dmsNode.getChildren.asScala.
-//                    collectFirst { case n@MessageChannelNode(c) if c == evt.getChannel => n } foreach (_.unreadEvents set true)
-//                  case evt: GenericMessageEvent if evt.getChannelType == ChannelType.GROUP => groupChatNode.getChildren.asScala.
-//                    collectFirst { case n@MessageChannelNode(c) if c == evt.getChannel => n } foreach (_.unreadEvents set true)
-//                  case evt: GenericMessageEvent if evt.getChannelType == ChannelType.TEXT => 
-//                    val textChannel = evt.getChannel.asInstanceOf[TextChannel]
-//                    findGuildNode(textChannel.getGuild).flatMap(_.getChildren.asScala.collectFirst {
-//                        case n@MessageChannelNode(`textChannel`) => n}) foreach (_.unreadEvents set true)
-//                  
-//                  case _ =>
-//                }
-//              }
-//
-//            case _ =>
-//          }
-//        }
-//      })
-//    
-//    selectedMessageChannel foreach { channel =>
-//      channel.getType match {
-//        case ChannelType.PRIVATE =>
-//          dmsNode.getChildren.asScala.collectFirst { case n@MessageChannelNode(c) if c == channel => n } foreach (_.unreadEvents set false)
-//        case ChannelType.GROUP =>
-//          groupChatNode.getChildren.asScala.collectFirst { case n@MessageChannelNode(c) if c == channel => n } foreach (_.unreadEvents set false)
-//        case _ =>
-//          val textChannel = channel.asInstanceOf[TextChannel]
-//          findGuildNode(textChannel.getGuild).flatMap(_.getChildren.asScala.collectFirst {
-//              case n@MessageChannelNode(`textChannel`) => n}) foreach (_.unreadEvents set false)
-//      }
-//    }
-    
-    }    
   }
-  
   
   private def missingServer(server: Server): Nothing = throw new IllegalArgumentException(s"Server $server was not added!")
   private def findServer(server: Server): ServerNode = root.getChildren.asScala.collectFirst { case n @ ServerNode(`server`) => n}.getOrElse(missingServer(server))

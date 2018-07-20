@@ -17,17 +17,17 @@ object MembersRetriever {
   def main(args: Array[String]): Unit = {
     val token = file"test-token".contentAsString()
     
-//    require(args.length == 1, "file argmuent required")
-//    val file = args(0).toFile
+    require(args.length == 1, "file argument required")
+    val file = args(0).toFile
     
-    val model = new CompressingChatModel()
-    val metrics = new MetricRegistry()
-    val memberMappingTimer = metrics.timer("member mapping time")
-    val storeTimer = metrics.timer("store operation time")
-    val usageMetric = metrics.histogram(s"bucket usage% ${model.statistics.members.usage.length} buckets")
-    val entriesMetric = metrics.histogram(s"entries per bucket")
-    val reporter = ConsoleReporter.forRegistry(metrics).build()
-    reporter.start(1, duration.SECONDS)
+//    val model = new CompressingChatModel()
+//    val metrics = new MetricRegistry()
+//    val memberMappingTimer = metrics.timer("member mapping time")
+//    val storeTimer = metrics.timer("store operation time")
+//    val usageMetric = metrics.histogram(s"bucket usage% ${model.statistics.members.usage.length} buckets")
+//    val entriesMetric = metrics.histogram(s"entries per bucket")
+//    val reporter = ConsoleReporter.forRegistry(metrics).build()
+//    reporter.start(1, duration.SECONDS)
     
     val client = new DiscordClient(token, new DiscordClient.DiscordListener {
         def prettyPrint(js: DynJValueSelector) = JsonUtils.renderJson(js.jv.result.get, true)
@@ -66,7 +66,7 @@ object MembersRetriever {
             val guilds = evt.guilds.collect { case Right(g) => g }
             println(System.currentTimeMillis + " requesting guilds " + guilds.map(_.name).mkString(", "))
             guilds foreach { g =>
-              model.putServer(ConnectorRegistry.DiscordConnector.mapServer(g))
+//              model.putServer(ConnectorRegistry.DiscordConnector.mapServer(g))
               connection.sendRequestGuildMembers(g.id, "", 0)
             }
             
@@ -80,21 +80,23 @@ object MembersRetriever {
               val totalAsOfNow = totalUsers.addAndGet(evt.members.size)
               println(System.currentTimeMillis + " " + evt.members.size + " members received for guild " + evt.guildId.snowflakeString + " total " + totalAsOfNow)
               
-              val server = model.getServer(evt.guildId, ConnectorRegistry.DiscordConnector).get
-              evt.members foreach { m =>
-                val member = memberMappingTimer.time(() => ConnectorRegistry.DiscordConnector.mapMember(m, server))
-                storeTimer.time(() => model.putMember(member))
-              }
+              file.append(prettyPrint(ge.payload()))
+              
+//              val server = model.getServer(evt.guildId, ConnectorRegistry.DiscordConnector).get
+//              evt.members foreach { m =>
+//                val member = memberMappingTimer.time(() => ConnectorRegistry.DiscordConnector.mapMember(m, server))
+//                storeTimer.time(() => model.putMember(member))
+//              }
               
               val guildName = ready.guilds.collectFirst { case Right(g) if g.id == evt.guildId => g.name.replace("/", "⁄") }.head
               
               println(s"Processed ${evt.members.length} members from guild $guildName")
               
-              val stats = model.statistics()
-              stats.members.usage foreach (u => usageMetric.update((u * 100).toInt))
-              stats.members.entriesPerBucket foreach entriesMetric.update
-              println("Overrun buckets: " + stats.members.overrunBuckets)
-              println(f"Cache hits: ${stats.members.cacheHits}, misses: ${stats.members.cacheMisses}, ratio ${stats.members.cacheHits.toDouble / stats.members.cacheMisses}")
+//              val stats = model.statistics()
+//              stats.members.usage foreach (u => usageMetric.update((u * 100).toInt))
+//              stats.members.entriesPerBucket foreach entriesMetric.update
+//              println("Overrun buckets: " + stats.members.overrunBuckets)
+//              println(f"Cache hits: ${stats.members.cacheHits}, misses: ${stats.members.cacheMisses}, ratio ${stats.members.cacheHits.toDouble / stats.members.cacheMisses}")
             }
           case _ =>
         }
