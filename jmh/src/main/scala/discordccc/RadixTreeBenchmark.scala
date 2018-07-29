@@ -4,7 +4,6 @@ import better.files._
 import com.codahale.metrics.ConsoleReporter
 import com.codahale.metrics.MetricRegistry
 import headache._, JsonCodecs._
-import org.openjdk.jmh.annotations._
 import play.api.libs.json.{Json}
 import scala.concurrent.duration._
 

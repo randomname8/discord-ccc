@@ -4,9 +4,9 @@ package connector
 import discordccc.model._
 import headache.{
   DiscordClient,
+  EmbedField,
   GatewayOp,
   GatewayEvents,
-  GuildMember,
   JsonUtils,
   PermissionOverwrite,
   Permissions,
@@ -16,16 +16,21 @@ import headache.{
 }, GatewayEvents._, JsonUtils.DynJValueSelector
 import java.util.Arrays
 import org.agrona.BitUtil
-import org.agrona.collections.{LongArrayList, Long2ObjectHashMap, Long2LongHashMap}
+import org.agrona.collections.{LongArrayList, Long2ObjectHashMap}
 import org.asynchttpclient.AsyncHttpClient
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{TreeSet}
-import scala.concurrent.{Future, ExecutionContext}, ExecutionContext.Implicits.global
+import scala.concurrent.{Future, ExecutionContext}
+import scala.concurrent.duration._
 
 object DiscordConnector {
   /*custom classes for state tracking, optimized for discord*/
   private[DiscordConnector] case class DUser(name: Array[Byte], bot: Boolean, friend: Boolean, discriminator: Short, avatar: Array[Byte])
-  private[DiscordConnector] case class ChannelData(name: Array[Byte], guildId: Snowflake, lastMessage: Snowflake, permissionOverwrites: Long2ObjectHashMap[PermissionOverwrite])
+  private[DiscordConnector] case class ChannelData(name: Array[Byte], topic: Array[Byte], guildId: Snowflake, lastMessage: Snowflake,
+                                                   permissionOverwrites: Long2ObjectHashMap[PermissionOverwrite],
+                                                   canRead: Boolean, canWrite: Boolean, dmUser: Snowflake)
+  private[DiscordConnector] case class GuildData(name: Array[Byte], lastMemberCount: Int, ownerId: Snowflake, icon: Option[String], region: Array[Byte],
+                                                 myRoles: Array[Snowflake])
   
   val DiscordCdn = "https://cdn.discordapp.com"
   
@@ -59,7 +64,7 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   implicit val discordBackpressureStrategy = headache.rest.BackPressureStrategy.Retry(3)
   private case class BotData(user: headache.User)
   private[this] var botData: BotData = _
-  private[this] val guilds = new Long2ObjectHashMap[Guild](10, 0.7f)
+  private[this] val guilds = new Long2ObjectHashMap[GuildData](10, 0.7f)
   private[this] val channels = new Long2ObjectHashMap[ChannelData](200, 0.5f)
   private[this] val allRoles = new Long2ObjectHashMap[Role](200, 0.5f)
   
@@ -67,14 +72,36 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   private[this] val guildUserNickname = new Long2ObjectHashMap[Long2ObjectHashMap[Array[Byte]]](10, 0.7f)
   private[this] val guildUsersRoles = new Long2ObjectHashMap[Long2ObjectHashMap[Array[Role]]](10, 0.7f)
   private[this] val guildMembers = new Long2ObjectHashMap[LongArrayList](10, 0.7f)
-  private[this] val privateChannelMembers = new Long2ObjectHashMap[Array[Snowflake]]()
+  private[this] val privateChannelMembers = new Long2ObjectHashMap[Array[Long]]() //Array[Long] is being passed to generic instead of Array[Snowflake] because scala will think that Array[Snowflake] is a Array[Object] due to generics mismatch
   private[this] val emptyLongMapInstance = new Long2ObjectHashMap()
   private def emptyLongMap[T]: Long2ObjectHashMap[T] = emptyLongMapInstance.asInstanceOf[Long2ObjectHashMap[T]]
   private[this] val noRoles = Array.empty[Role]
   
-  def calculatePermission(userId: Long, memberRoles: Array[Role], channelId: Long, serverId: Long): Long =  {
-    val overwrites = channels.get(channelId).permissionOverwrites
-      
+  private def optSnowflake(s: Snowflake) = if (s == NoSnowflake) None else Some(s)
+  
+  private[this] implicit val generalExecutionContext = ExecutionContext.fromExecutorService {
+    val tf: java.util.concurrent.ThreadFactory = r => {
+      val t = new Thread(r)
+      t.setDaemon(true)
+      t
+    }
+    val runtimeCores = Runtime.getRuntime.availableProcessors
+    val r = new java.util.concurrent.ThreadPoolExecutor(runtimeCores, runtimeCores, 30l, SECONDS, new java.util.concurrent.LinkedBlockingQueue[Runnable](), tf)
+    r.allowCoreThreadTimeOut(true)
+    r
+  }
+  private[this] val chunksProcessorExecutionContext = ExecutionContext.fromExecutorService {
+    val tf: java.util.concurrent.ThreadFactory = r => {
+      val t = new Thread(r)
+      t.setDaemon(true)
+      t
+    }
+    val r = new java.util.concurrent.ThreadPoolExecutor(1, 1, 30l, SECONDS, new java.util.concurrent.LinkedBlockingQueue[Runnable](), tf)
+    r.allowCoreThreadTimeOut(true)
+    r
+  }
+  
+  def calculatePermission(userId: Long, memberRoles: Array[Role], channelId: Long, serverId: Long, overwrites: Long2ObjectHashMap[PermissionOverwrite]): Long =  {
     val everyoneRoles = allRoles.get(serverId)
     
     val stackOfOverwritesBuffer = threadLocalRolesBuffer.get()
@@ -88,9 +115,9 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   }
   
   override def init() = client.login(Some(1))
-  def getServer(id: Long): Option[Server] = Option(guilds.get(id)).map(mapServer)
-  def getChannel(id: Long): Option[Channel] = guilds.asScala.values.flatMap(s => s.channels.find(_.id == id).map(c => mapChannel(c, Some(s.id), true, true))).headOption
-  def getChannels(): Seq[Channel] = guilds.asScala.values.flatMap(s => s.channels.map(c => mapChannel(c, Some(s.id), true, true))).to[Vector]
+  def getServer(id: Long): Option[Server] = Option(guilds.get(id)).map(mapServer(id, _))
+  def getChannel(id: Long): Option[Channel] = channels.asScala.find(_._1 == id).map(entry => mapChannel(entry._1, entry._2))
+  def getChannels(): Seq[Channel] = channels.asScala.map(entry => mapChannel(entry._1, entry._2)).to[Vector]
   def getMember(userId: Long, channelId: Long): Option[Member] = Option(allUsers.get(userId)).map { user =>
     val channel = channels.get(channelId)
     val serverId = channel.guildId
@@ -138,7 +165,7 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
         } else {
           for {
             (userId, roles) <- guildUsersRoles.getOrDefault(serverId, emptyLongMap).asScala
-            if Permissions.ViewChannels existsIn calculatePermission(userId, roles, channel.id, serverId)
+            if Permissions.ViewChannels existsIn calculatePermission(userId, roles, channel.id, serverId, channels.get(channel.id).permissionOverwrites)
           } usersInChannel += userId.longValue -> roles.withFilter(_.hoist).map(_.position).foldLeft(0)((a, b) => if (a >= b) a else b)
         }
 
@@ -156,13 +183,13 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
         }
       case _ =>
         /*dm channel*/
-        val memberIds: Array[Snowflake] = privateChannelMembers.getOrDefault(channel.id, Array.empty[Snowflake])
+        val memberIds = privateChannelMembers.getOrDefault(channel.id, Array.empty[Long])
         memberIds.map(i => Right(getUser(i).get))
     }
   }
   def getUser(id: Long): Option[User] = Option(allUsers.get(id)).map(duser => 
     User(id, new String(duser.name), duser.bot, duser.discriminator.toString,
-         Option(duser.avatar).map(a => s"$DiscordCdn/avatars/${Snowflake(id).snowflakeString}/${BitUtil.toHex(a)}.png").
+         Option(duser.avatar).map(a => s"$DiscordCdn/avatars/${Snowflake(id).snowflakeString}/${BitUtil.toHex(a)}").
          orElse(Some(s"$DiscordCdn/embed/avatars/${duser.discriminator % 5}.png")), duser.friend, this))
   
   
@@ -175,6 +202,7 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
                                 before = from.map(Snowflake.apply) orElse Option(channels.get(channel.id)).map(_.lastMessage) getOrElse NoSnowflake,
                                 limit = limit.getOrElse(100)).map(_.map(mapMessage).reverse)
   
+  def getCustomEmoji(id: Long) = Some(s"$DiscordCdn/emojis/${Snowflake(id).snowflakeString}.png")
   
   
 //  val logFile = File("messagesLog.json")
@@ -211,26 +239,27 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
       
     case GuildCreateEvent(evt) => addGuild(evt.guild)
     case ChannelCreateEvent(evt) => 
-      val guildIdAndMyMember = evt.channel.guildId.map { gid => 
-        val guild = guilds.get(gid)
-        val myMember = guild.members.find(_.user.id == botData.user.id).get
-        gid -> myMember
-      }
+      val guildIdAndMyMember = evt.channel.guildId.map(gid => gid -> guilds.get(gid).myRoles)
       addChannel(evt.channel, guildIdAndMyMember)
       
     case ge@GatewayEvent(EventType.GuildMemberChunk, _) =>  //parse the message in a different thread from the websocket
-      val GuildMemberChunkEvent(evt) = ge
-      for (m <- evt.members) {
-        allUsers.put(m.user.id, mapUser(m.user))
-        m.nick.foreach(n => guildUserNickname.asScala.getOrElseUpdate(evt.guildId, new Long2ObjectHashMap).put(m.user.id, n.getBytes))
-        if (m.roles.nonEmpty) guildUsersRoles.asScala.getOrElseUpdate(evt.guildId, new Long2ObjectHashMap).put(m.user.id, m.roles.map(allRoles.get))
-        guildMembers.get(evt.guildId) add m.user.id
+      Future {
+        val GuildMemberChunkEvent(evt) = ge //do the json parsing in the general execution context
+        Future {
+          for (m <- evt.members) {
+            allUsers.put(m.user.id, mapUser(m.user))
+            m.nick.foreach(n => guildUserNickname.asScala.getOrElseUpdate(evt.guildId, new Long2ObjectHashMap).put(m.user.id, n.getBytes))
+            if (m.roles.nonEmpty) guildUsersRoles.asScala.getOrElseUpdate(evt.guildId, new Long2ObjectHashMap).put(m.user.id, m.roles.map(allRoles.get))
+            guildMembers.get(evt.guildId) add m.user.id
+          }
+          println(s"Processed ${guildMembers.get(evt.guildId).size} members for guild ${new String(guilds.get(evt.guildId).name)}")
+        }(chunksProcessorExecutionContext) //modify always from the same thread
+        
       }
-      println(s"Processed ${guildMembers.get(evt.guildId).size} members for guild ${guilds.get(evt.guildId).name}")
       
       
     case ge@MessageCreateEvent(evt) =>
-      if (evt.message.embeds.nonEmpty) println(JsonUtils.renderJson(ge.payload().jv.get, true))
+//      if (evt.message.embeds.nonEmpty) println(JsonUtils.renderJson(ge.payload().jv.get, true))
       channels.put(evt.message.channelId, channels.get(evt.message.channelId).copy(lastMessage = evt.message.id))
       val toNotify = MessageEvent(mapMessage(evt.message), Created, this)
       for (l <- listeners; if l.isDefinedAt(toNotify)) l(toNotify)
@@ -247,31 +276,40 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   }
   
   private def addGuild(guild: Guild): Unit = {
-    guilds.put(guild.id, guild)
+    val myMember = guild.members.find(_.user.id == botData.user.id).get
+    val guildData = GuildData(guild.name.getBytes, guild.memberCount, guild.ownerId, guild.icon, guild.region.getBytes, myMember.roles)
+    guilds.put(guild.id, guildData)
     guildMembers.put(guild.id, new LongArrayList(guild.memberCount, Long.MinValue))
     guild.roles.foreach(r => allRoles.put(r.id, r))
     
-    val server = mapServer(guild)
+    val server = mapServer(guild.id, guildData)
     val serverEvt = ServerEvent(server, Created, this)
     for (l <- listeners; if l.isDefinedAt(serverEvt)) l(serverEvt)
     
-    val myMember = guild.members.find(_.user.id == botData.user.id).get
-    guild.channels foreach (c => addChannel(c, Some(guild.id -> myMember)))
+    guild.channels.filter(_.tpe == headache.Channel.Type.GuildText) foreach (c => addChannel(c, Some(guild.id -> guildData.myRoles)))
 
   }
-  private def addChannel(c: headache.Channel, guildIdAndMyMember: Option[(Snowflake, GuildMember)]): Unit = {
-    val (server, canRead, canWrite) = guildIdAndMyMember match {
-      case Some((guildId, myMember)) =>
-        channels.put(c.id, ChannelData(c.name.map(_.getBytes).orNull, guildId, c.lastMessageId.getOrElse(NoSnowflake), newLong2ObjectHashMap(c.permissionOverwrites)(_.id)))
-        val perms = calculatePermission(botData.user.id, myMember.roles.map(allRoles.get), c.id, guildId)
-        (Some(guildId), Permissions.ViewChannels existsIn perms, Permissions.SendMessages existsIn perms)
+  private def addChannel(c: headache.Channel, guildIdAndMyRoles: Option[(Snowflake, Array[Snowflake])]): Unit = {
+    val channelData = guildIdAndMyRoles match {
+      case Some((guildId, myRoles)) =>
+        val overwrites = newLong2ObjectHashMap(c.permissionOverwrites)(_.id)
+        val perms = calculatePermission(botData.user.id, myRoles.map(allRoles.get), c.id, guildId, overwrites)
+        val (canRead, canWrite) = (Permissions.ViewChannels existsIn perms, Permissions.SendMessages existsIn perms)
+        val channelData = ChannelData(c.name.map(_.getBytes).orNull, c.topic.map(_.getBytes).orNull, guildId,
+                                      c.lastMessageId.getOrElse(NoSnowflake), overwrites,
+                                      canRead, canWrite, NoSnowflake)
+        channels.put(c.id, channelData)
+        channelData
       case _ =>
-        channels.put(c.id, ChannelData(c.name.map(_.getBytes).orNull, NoSnowflake, c.lastMessageId.getOrElse(NoSnowflake), emptyLongMap))
+        val dmUserId = if (c.recipients.size == 1) c.recipients.head.id else NoSnowflake
+        val channelData = ChannelData(c.name.map(_.getBytes).orNull, null, NoSnowflake, c.lastMessageId.getOrElse(NoSnowflake), emptyLongMap,
+                                      true, true, dmUserId)
+        channels.put(c.id, channelData)
         c.recipients.foreach(u => allUsers.put(u.id, mapUser(u)))
-        privateChannelMembers.put(c.id, c.recipients.map(_.id))
-        (None, true, true) //if there is no server, then it is a group or a dm channel.
+        privateChannelMembers.put(c.id, c.recipients.map(_.id: Long))
+        channelData
     }
-    val mappedChannel = mapChannel(c, server, canRead, canWrite)
+    val mappedChannel = mapChannel(c.id, channelData)
     val channelEvt = ChannelEvent(mappedChannel, Created, this)
     for (l <- listeners; if l.isDefinedAt(channelEvt)) l(channelEvt)
   }
@@ -281,28 +319,35 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
     entries foreach (e => res.put(id(e), e))
     res
   }
-  
-  private def mapServer(guild: Guild): Server = {
-    Server(guild.id, guild.name, s"guild - ${guild.memberCount} members", guild.region,
-           guild.icon.map(icon => s"$DiscordCdn/icons/${guild.id.snowflakeString}/$icon.png"), this)
+ 
+  private def mapServer(id: Long, guild: GuildData): Server = {
+    Server(id, new String(guild.name), s"guild - ${guild.lastMemberCount} members", new String(guild.region),
+           guild.icon.map(icon => s"$DiscordCdn/icons/${Snowflake(id).snowflakeString}/$icon.png"), this)
   }
   
-  private def mapChannel(c: headache.Channel, serverId: Option[Snowflake], canRead: Boolean, canWrite: Boolean): Channel = {
-    val channelName = c.name.getOrElse(c.recipients.map(_.userName).mkString(", ")) //if it has no name, it's probably a DM or group DM channel, so use the name of the participants
-//    val permissionsOverwrites = LongMap(c.permissionOverwrites.map(o => o.id -> o).toSeq:_*)
-    val dmUserId = c.recipients match {
-      case Array(user) => Some(user.id)
-      case _ => None
+  private def mapChannel(id: Long, data: ChannelData): Channel = {
+    val channelName = Option(data.name).map(new String(_)).getOrElse { 
+      privateChannelMembers.get(id).map { uid =>
+        Option(allUsers.get(uid)).map(u => new String(u.name)).getOrElse("Unk. user " + uid)
+      }.mkString(", ")
     }
-    Channel(c.id, serverId, channelName, c.topic.getOrElse(""), canRead, canWrite, true, dmUserId, this)
+//    val permissionsOverwrites = LongMap(c.permissionOverwrites.map(o => o.id -> o).toSeq:_*)
+    val dmUserId = optSnowflake(data.dmUser)
+    Channel(id, optSnowflake(data.guildId), channelName, Option(data.topic).map(new String(_)).getOrElse(""), data.canRead, data.canWrite, true, dmUserId, this)
   }
   
   private def mapUser(u: headache.User): DUser = DUser(u.userName.getBytes, u.bot, true /*TODO: not everyone is a friend*/, u.discriminator.toShort,
-                                                       u.avatar.map(BitUtil.fromHex).getOrElse(null))
+                                                       u.avatar.map(s => BitUtil.fromHex(s.stripPrefix("a_"))).getOrElse(null))
   
   private def mapMessage(m: headache.Message): Message = {
-    m.embeds.foreach(e => println("Processing embed: " + e))
-    val content = Content.Text(m.content) +: m.embeds.map(embed => Content.RichLayout(
+//    m.embeds.foreach(e => println("Processing embed: " + e))
+    val content = Content.Text(m.content) +: m.embeds.map{ embed =>
+      val colsMaxFields = embed.fields.foldLeft(Vector.empty[EmbedField] -> 0) {
+        case ((acc, inlinedRun), field) if !field.inline => (acc :+ field) -> 0
+        case ((acc, inlinedRun), field) if field.inline && inlinedRun < 3 => (acc :+ field) -> (inlinedRun + 1)
+        case ((acc, inlinedRun), field) if field.inline && inlinedRun == 3 => (acc :+ field.copy(inline = false)) -> 0
+      }._1
+      Content.RichLayout(
         title = embed.title,
         description = embed.description.map(Content.Text),
         url = embed.url,
@@ -311,9 +356,11 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
         footer = embed.footer.map(f => Content.RichLayout(title = Some(f.text), image = f.iconUrl.map(u => Content.InlinedImage(u, u, "")))),
         image = embed.image.map(i => Content.InlinedImage(i.url, i.url, "", width = i.width, height = i.height)),
         thumbnail = embed.thumbnail.map(i => Content.InlinedImage(i.url, i.url, "", width = i.width, height = i.height)),
-        author = embed.author.map(a => Content.RichLayout(title = Some(a.name), url = a.url, image = a.iconUrl.map(i => Content.InlinedImage(i, i, "")))),
-        fields = embed.fields.map(f => Content.Field(f.name, Content.Text(f.value), f.inline))
-      ))
+        author = embed.author.map(a => Content.RichLayout(title = Some(a.name), url = a.url, image = a.iconUrl.map(i => Content.InlinedImage(i, i, "")))).orElse(
+          embed.provider.map(prov => Content.RichLayout(title = Some(prov.name), url = prov.url))),
+        fields = colsMaxFields.map(f => Content.Field(f.name, Content.Text(f.value), f.inline))
+      )
+    }
     Message(m.id, content, m.timestamp, m.editedTimestamp, m.attachments.map(a => Message.Attachment(a.filename, a.url)), m.channelId, m.author.id, this)
   }
 }

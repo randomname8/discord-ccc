@@ -15,8 +15,17 @@
   -fx-font-weight: bold;
 }
 
+.chat-list-member-nickname {
+  -fx-text-fill: ladder(
+    -fx-color,
+    #aaa 55%,
+    derive(-fx-color,-63%) 75%,
+    #aaa 76%
+    );
+}
+
 .rich-layout-content {
-  -fx-border-color: transparent lightgray lightgray lightgray, transparent;
+  -fx-border-color: transparent -fx-box-border -fx-box-border -fx-box-border, transparent;
   -fx-border-insets: 1em, 0.15em;
   -fx-border-width: 0.09em, 0.09em;
   -fx-border-radius: 0 0 0.5em 0.5em, 0 0 0.5em 0.5em;
@@ -24,9 +33,11 @@
 }
 .rich-layout-content-author {
   -fx-text-fill: black;
-  -fx-font-size: 0.7em;
+  /*-fx-stroke: white;*/
+  /*-fx-stroke-width: 0.08em;*/
+  -fx-font-size: 0.9em;
   -fx-font-weight: bold;
-  -fx-effect: dropshadow(two-pass-box, whitesmoke, 0.5em, 0.5, 0, 0);
+  -fx-effect: dropshadow(two-pass-box, whitesmoke, 0.25em, 1, 0, 0);
 }
 .rich-layout-content-title {
   -fx-text-fill: mediumaquamarine;
@@ -37,4 +48,18 @@
   -fx-font-weight: bold;
 }
 .rich-layout-content-field-value {
+}
+
+.unknown-user-mention,
+.unknown-channel-mention,
+.unknown-emoji {
+  -fx-text-fill: red;
+  -fx-background-color: derive(-fx-text-fill, 30%);
+}
+
+.user-mention,
+.channel-mention {
+  -fx-text-fill: #7a8fdc;
+  -fx-background-color: derive(-fx-text-fill, 80%);
+  -fx-font-weight: bold;
 }

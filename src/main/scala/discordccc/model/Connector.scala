@@ -22,6 +22,8 @@ trait Connector {
   def sendMessage(channel: Channel, content: Content): Future[Message]
   def getLastMessages(channel: Channel, from: Option[Long] = None, limit: Option[Int] = None): Future[Seq[Message]]
   
+  def getCustomEmoji(id: Long): Option[String]
+  
   def init(): Future[Any]
 }
 object Connector {

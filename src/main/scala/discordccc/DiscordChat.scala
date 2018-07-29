@@ -14,7 +14,9 @@ import javafx.stage.Stage
 import org.asynchttpclient.{DefaultAsyncHttpClient, DefaultAsyncHttpClientConfig}
 
 object DiscordChat {
-  def main(args: Array[String]): Unit = Application.launch(classOf[DiscordChat], args:_*)
+  def main(args: Array[String]): Unit = {
+    Application.launch(classOf[DiscordChat], args:_*)
+  }
 }
 class DiscordChat extends BaseApplication with NavigationTree with ConnectorListener {
   override val sceneRoot = FXMLLoader.load(getClass.getResource("/main-window.fxml")).asInstanceOf[Pane]
@@ -28,18 +30,18 @@ class DiscordChat extends BaseApplication with NavigationTree with ConnectorList
     imagesCache(k) = res
     res
   }
-  val markdownRenderer = new DiscordMarkdownRenderer(getHostServices, imagesCache)
-  
-  val chatList = new ChatList[Member, Message](getHostServices, markdownRenderer, emojis.mapValues(_.get),
+  val markdownRenderer = new DiscordMarkdownRenderer(getHostServices, imagesCache,
+                                                     id => Option(selectedMessageChannel.get).flatMap(c => c.connector.getUser(id)),
+                                                     id => Option(selectedMessageChannel.get).flatMap(c => c.connector.getChannel(id)),
+                                                     id => Option(selectedMessageChannel.get).flatMap(c => c.connector.getCustomEmoji(id)))
+  val chatList = new ChatList[Member, Message](getHostServices,
                                                _.nickname,
                                                _.originalContent,
                                                m => LocalDateTime.ofInstant(m.created, ZoneId.systemDefault))
-  
-  chatList.messageFormatter set DiscordMarkdown.adaptToMarkdown
-  chatList.additionalMessageRenderFactory set new AdditionalMessageRenderer(imagesCache, emojis.mapValues(_.get), markdownRenderer)
+  chatList.messageRenderFactory set new MessageRenderer(imagesCache, emojis.mapValues(_.get), markdownRenderer)
   chatList.userNameNodeFactory set MemberRender
   
-  val chatTextInput = new ChatTextInput(markdownRenderer, emojis.mapValues(_.get))
+  val chatTextInput = new ChatTextInput(markdownRenderer, markdownRenderer.nodeFactory, emojis.mapValues(_.get))
   
   lazy val menuBar = sceneRoot.lookup("#menubar").asInstanceOf[MenuBar]
   lazy val statusPanel = sceneRoot.lookup("#status-panel").asInstanceOf[Pane]
@@ -114,6 +116,18 @@ class DiscordChat extends BaseApplication with NavigationTree with ConnectorList
     }
     
     discordLogin(stage).listeners += connectorListener
+    
+    val darkTheme = File("dark-theme.css")
+    stage.getScene.getStylesheets.add(darkTheme.url.toString)
+    
+    
+    new FileMonitor(File("dark-theme.css")) {
+      override def onModify(file: File, count: Int) = JavafxExecutionContext.execute { () =>
+        println("reloading css")
+        stage.getScene.getStylesheets.remove(darkTheme.url.toString)
+        stage.getScene.getStylesheets.add(darkTheme.url.toString)
+      }
+    }.start()(scala.concurrent.ExecutionContext.fromExecutorService(java.util.concurrent.Executors.newSingleThreadExecutor()))
   }
   
   private def sendUserInput(): Unit = {
@@ -142,9 +156,9 @@ class DiscordChat extends BaseApplication with NavigationTree with ConnectorList
   protected def addMessage(message: Message): Unit = {
     val selectedChannel = selectedMessageChannel.get
     val connector = selectedChannel.connector
-    val user = connector.getUser(message.authorId).getOrElse(User(0, "unk.", false, "non existent user?", None, false, null))
+    val user = connector.getUser(message.authorId).getOrElse(User(0, "unk.", false, "non existent user?", None, false, connector))
     val member = connector.getMember(message.authorId, message.channelId).getOrElse( 
-      Member(user.id, selectedChannel.serverId.getOrElse(0), user.name, Seq.empty, 0, false, null))
+      Member(user.id, selectedChannel.serverId.getOrElse(0), user.name, Seq.empty, 0, false, connector))
     chatList.addEntry(member, imagesCache(user.imageUrl.getOrElse("/red-questionmark.png")), message)
   }
   

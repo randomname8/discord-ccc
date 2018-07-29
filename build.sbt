@@ -27,22 +27,32 @@ libraryDependencies ++= Seq(
 resolvers += "jitpack.io" at "https://jitpack.io"
 mainClass in reStart := Some("ccc.DevAppReloader")
 
+enablePlugins(JavaAppPackaging)
+mappings in (Compile, packageDoc) := Seq()
+javaOptions in Universal ++= Seq(
+  //"-J-Xmx120m",
+  "-J-Xms120m",
+  "-J-Xss520K",
+  "-J-XX:+UseStringDeduplication",
+  "-Dprism.lcdtext=false",
+  "-Dprism.text=t2k",
+  "-Dcom.sun.javafx.fontSize=22",
+)
 
-mainClass in (Compile, packageBin) := Some("discordccc.CccDiscord")
+
+mainClass in (Compile, packageBin) := Some("discordccc.DiscordChat")
 javaOptions in (Proguard, proguard) := Seq("-Xss8M")
 proguardOptions in Proguard ++= Seq(
   "-dontwarn", "-ignorewarnings", "-printmapping proguard-obfuscation-mappings",
   "-optimizations class/merging/vertical,class/marking/final,code/simplification/*", "-optimizationpasses 2",
   //"-dontoptimize",
   "-dontobfuscate",
-  ProguardOptions.keepMain("discordccc.CccDiscord"),
+  ProguardOptions.keepMain("discordccc.DiscordChat"),
   """-keep enum org.nibor.autolink.LinkType {
     public protected *;
-  }""")
-proguardInputFilter in Proguard := {
-  case f if f.name contains "JDA-3.5.1_339.jar" => Some("!natives/**")
-  case file => None
-}
+  }""",
+  """-keep class scala.concurrent.stm.**""")
+proguardInputFilter in Proguard := { file => None }
 proguardMergeStrategies in Proguard += ProguardMerge.first("META-INF/MANIFEST.MF")
 
 

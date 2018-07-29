@@ -1,6 +1,6 @@
 package discordccc
 
-import discordccc.model.{Member, User, Connector}, Connector._
+import discordccc.model.{Connector}, Connector._
 import javafx.application.Platform
 
 trait ConnectorListener { self: DiscordChat =>
@@ -19,13 +19,16 @@ trait ConnectorListener { self: DiscordChat =>
       
     case MessageEvent(message, Created, connector) =>
       val selectedChannel = selectedMessageChannel.get
-      if (selectedChannel != null && message.channelId == selectedChannel.id && message.connector == selectedChannel.connector) {
-        Platform.runLater(() => addMessage(message))
+      Platform.runLater { () => 
+        if (selectedChannel != null && message.channelId == selectedChannel.id && message.connector == selectedChannel.connector) {
+          addMessage(message)
+        } else {
+          connector.getChannel(message.channelId) foreach { c =>
+            if (c.dmUserId.nonEmpty) dmChannelUpdated(c)
+            else if (c.serverId.isEmpty) groupChannelUpdated(c)
+            else channelUpdated(c, connector.getServer(c.serverId.get).get)
+          }
+        }
       }
-//        val user = connector.getUser(message.authorId).getOrElse(User(0, "unk.", false, "non existent user?", None, false, null))
-//        val member = connector.getMember(message.authorId, message.channelId).getOrElse( 
-//          Member(user.id, selectedChannel.serverId.getOrElse(0), user.name, Seq.empty, 0, false, null))
-//        Platform.runLater { () => chatList.addEntry(member, imagesCache(user.imageUrl.getOrElse("/red-questionmark.png")), message) }
-//      }
   }
 }
