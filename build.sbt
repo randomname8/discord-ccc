@@ -51,7 +51,12 @@ proguardOptions in Proguard ++= Seq(
   """-keep enum org.nibor.autolink.LinkType {
     public protected *;
   }""",
-  """-keep class scala.concurrent.stm.**""")
+  """-keep enum com.fasterxml.jackson.** {
+    public protected *;
+  }""",
+  """-keep class scala.concurrent.stm.**""",
+  """-keep class scala.concurrent.stm.impl.DefaultFactory""",
+)
 proguardInputFilter in Proguard := { file => None }
 proguardMergeStrategies in Proguard += ProguardMerge.first("META-INF/MANIFEST.MF")
 

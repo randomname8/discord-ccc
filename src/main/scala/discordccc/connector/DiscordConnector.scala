@@ -4,7 +4,12 @@ package connector
 import discordccc.model._
 import headache.{
   DiscordClient,
+  Embed,
+  EmbedAuthor,
   EmbedField,
+  EmbedImage,
+  EmbedFooter,
+  EmbedThumbnail,
   GatewayOp,
   GatewayEvents,
   JsonUtils,
@@ -14,6 +19,7 @@ import headache.{
   Snowflake,
   NoSnowflake,
 }, GatewayEvents._, JsonUtils.DynJValueSelector
+import java.time.Instant
 import java.util.Arrays
 import org.agrona.BitUtil
 import org.agrona.collections.{LongArrayList, Long2ObjectHashMap}
@@ -195,7 +201,24 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   
   
   def sendMessage(channel: Channel, content: Content): Future[Message] = {
-    client.channels.createMessage(Snowflake(channel.id), content.originalText).map(mapMessage)
+    content match {
+      case Content.Text(t) => client.channels.createMessage(Snowflake(channel.id), t).map(mapMessage)
+      case rl: Content.RichLayout => 
+        val e = Embed(
+          tpe = "rich",
+          title = rl.title,
+          description = rl.description.map(_.originalText),
+          url = rl.url,
+          timestamp = Some(Instant.now),
+          color = rl.color,
+          footer = rl.footer.map { case footer: Content.RichLayout => EmbedFooter(footer.title.get, footer.image.map(_.url)); case footer => EmbedFooter(footer.originalText) },
+          image = rl.image.map(image => EmbedImage(image.url, proxyUrl = null, height = image.height, width = image.width)),
+          thumbnail = rl.thumbnail.map(image => EmbedThumbnail(image.url, proxyUrl = null, height = image.height, width = image.width)),
+          author = rl.author.map { case author: Content.RichLayout => EmbedAuthor(author.title.get, author.image.map(_.url)); case author => EmbedAuthor(author.originalText) },
+          fields = rl.fields.map(f => EmbedField(f.name, f.value.originalText, f.inline)).toArray
+        )
+        client.channels.createMessage(Snowflake(channel.id), null, embed = e).map(mapMessage)
+    }
   }
   def getLastMessages(channel: Channel, from: Option[Long] = None, limit: Option[Int]): Future[Seq[Message]] =
     client.channels.getMessages(Snowflake(channel.id),
@@ -205,13 +228,13 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   def getCustomEmoji(id: Long) = Some(s"$DiscordCdn/emojis/${Snowflake(id).snowflakeString}.png")
   
   
-//  val logFile = File("messagesLog.json")
-//  logFile.clear()
+  val logFile = better.files.File("messagesLog.json")
+  logFile.clear()
 
 //  implicit val eventsProcessor = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor(r => new Thread(r, "chunks processor")))
   
   override def onGatewayOp(conn: DiscordClient#GatewayConnection, op: GatewayOp, data: => DynJValueSelector): Unit = {
-//    logFile.append(JsonUtils.renderJson(data.jv.get, true) + "\n")
+    logFile.append(JsonUtils.renderJson(data.jv.get, true) + "\n")
   }
   override def onUnexpectedGatewayOp(conn: DiscordClient#GatewayConnection, op: Int, data: => DynJValueSelector): Unit = {
     println(s"Received unexpected $op " + JsonUtils.renderJson(data.jv.get, true) + "\n")
@@ -237,7 +260,9 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
       if (conn != null) guilds foreach (g => conn.sendRequestGuildMembers(g.id))
       
       
-    case GuildCreateEvent(evt) => addGuild(evt.guild)
+    case GuildCreateEvent(evt) => 
+      addGuild(evt.guild)
+      conn.sendRequestGuildMembers(evt.guild.id)
     case ChannelCreateEvent(evt) => 
       val guildIdAndMyMember = evt.channel.guildId.map(gid => gid -> guilds.get(gid).myRoles)
       addChannel(evt.channel, guildIdAndMyMember)
@@ -254,15 +279,16 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
           }
           println(s"Processed ${guildMembers.get(evt.guildId).size} members for guild ${new String(guilds.get(evt.guildId).name)}")
         }(chunksProcessorExecutionContext) //modify always from the same thread
-        
       }
       
       
     case ge@MessageCreateEvent(evt) =>
 //      if (evt.message.embeds.nonEmpty) println(JsonUtils.renderJson(ge.payload().jv.get, true))
-      channels.put(evt.message.channelId, channels.get(evt.message.channelId).copy(lastMessage = evt.message.id))
-      val toNotify = MessageEvent(mapMessage(evt.message), Created, this)
-      for (l <- listeners; if l.isDefinedAt(toNotify)) l(toNotify)
+      Option(channels.get(evt.message.channelId)) foreach { data =>
+        channels.put(evt.message.channelId, data.copy(lastMessage = evt.message.id))
+        val toNotify = MessageEvent(mapMessage(evt.message), Created, this)
+        for (l <- listeners; if l.isDefinedAt(toNotify)) l(toNotify)
+      }
       
       
 //    case ge@GatewayEvent(EventType.MessageCreate, payload) =>

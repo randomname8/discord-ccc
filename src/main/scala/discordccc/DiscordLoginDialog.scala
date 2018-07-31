@@ -33,6 +33,7 @@ class DiscordLoginDialog(ahc: AsyncHttpClient, listener: headache.DiscordClient.
         client.init() onComplete { result =>
           loadingIndicator setVisible false
           result.fold(ex => {
+              ex.printStackTrace
               statusMessage setText ex.getMessage
               statusMessage setVisible true
               lazy val textChangeListener: ChangeListener[String] = (_, _, newText) => {

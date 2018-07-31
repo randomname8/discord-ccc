@@ -7,10 +7,12 @@ import java.time.{LocalDateTime, ZoneId}
 import javafx.application.Application
 import javafx.beans.property.SimpleObjectProperty
 import javafx.fxml.FXMLLoader
-import javafx.scene.control.{MenuBar, TreeView, ScrollBar}
+import javafx.geometry.Pos
+import javafx.scene.Scene
+import javafx.scene.control.{MenuBar, TreeView, ScrollBar, Button}
 import javafx.scene.input.KeyCode
-import javafx.scene.layout.{BorderPane, Pane}
-import javafx.stage.Stage
+import javafx.scene.layout.{BorderPane, Pane, HBox, Priority}
+import javafx.stage.{Modality, Stage}
 import org.asynchttpclient.{DefaultAsyncHttpClient, DefaultAsyncHttpClientConfig}
 
 object DiscordChat {
@@ -61,12 +63,34 @@ class DiscordChat extends BaseApplication with NavigationTree with ConnectorList
     sceneRoot.applyCss() //we need the scene to be built in order for the lookups to work
     
     configureNavigationTree()
+    
+    
+    val richLayoutDialog = new Stage()
+    richLayoutDialog.initOwner(stage)
+    richLayoutDialog.initModality(Modality.NONE)
+    val richLayoutPane = new RichLayoutBuilderPane(new ChatTextInput(markdownRenderer, markdownRenderer.nodeFactory, emojis.mapValues(_.get)))
+    richLayoutDialog.setScene(new Scene(richLayoutPane).modify(_.getStylesheets.addAll(stage.getScene.getStylesheets)))
+    richLayoutDialog.sizeToScene()
+    
+    val showRichLayoutDialog = new Button("Rich Layout")
+    showRichLayoutDialog.setOnAction(_ => richLayoutDialog.show())
+    
+    richLayoutPane.onSubmit.set { rl => 
+      val channel = selectedMessageChannel.get
+      channel.connector.sendMessage(channel, rl).onComplete {
+        case scala.util.Success(_) => 
+        case scala.util.Failure(ex) =>
+          ex.printStackTrace
+      }(JavafxExecutionContext)
+    }
+    
     contentArea setCenter new BorderPane().modify(
       _ setCenter chatList,
-      _ bottom chatTextInput)
+      _ bottom hbox(chatTextInput.modify(HBox.setHgrow(_, Priority.ALWAYS)), showRichLayoutDialog)(alignment = Pos.TOP_LEFT))
     
     //configure the chat text input to only be enabled when there's a channel selected
     chatTextInput.textArea.disableProperty bind selectedMessageChannel.isNull
+    showRichLayoutDialog.disableProperty bind selectedMessageChannel.isNull
     
     chatTextInput.textArea.setOnKeyReleased { evt =>
       if (evt.getCode == KeyCode.ENTER) {

@@ -23,7 +23,12 @@ trait NavigationTree { self: DiscordChat =>
         User(0, "Unk.", false, s"Member $id not found", None, false, null)), emojis("👑").get) }
     
     navigationTree.getSelectionModel.selectedItemProperty foreach (item => if (item != null) item match {
-        case ChannelNode(channel) => selectedMessageChannel set channel
+        case ChannelNode(channel) => 
+          selectedMessageChannel set channel
+          val node = if (channel.dmUserId.isDefined) nodeFor(channel, dmsNode)
+          else if (channel.serverId.isEmpty) nodeFor(channel, groupChatNode)
+          else channel.connector.getServer(channel.serverId.get).flatMap(s => findServer(s).getChildren.asScala.collectFirst { case n @ ChannelNode(`channel`) => n })
+          node.foreach(_.unreadEvents set false)
         case other =>
       }
     )
