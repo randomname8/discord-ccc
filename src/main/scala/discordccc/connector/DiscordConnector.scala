@@ -24,6 +24,7 @@ import java.util.Arrays
 import org.agrona.BitUtil
 import org.agrona.collections.{LongArrayList, Long2ObjectHashMap}
 import org.asynchttpclient.AsyncHttpClient
+import org.asynchttpclient.request.body.multipart.Part
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{TreeSet}
 import scala.concurrent.{Future, ExecutionContext}
@@ -200,14 +201,14 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   
   
   
-  def sendMessage(channel: Channel, content: Content): Future[Message] = {
+  def sendMessage(channel: Channel, content: Content, attachments: Seq[Part], progressListener: (Long, Long, Long) => Unit): Future[Message] = {
     content match {
-      case Content.Text(t) => client.channels.createMessage(Snowflake(channel.id), t).map(mapMessage)
+      case Content.Text(t) => client.channels.createMessage(Snowflake(channel.id), t, attachments = attachments.toArray, progressListener = progressListener).map(mapMessage)
       case rl: Content.RichLayout => 
         val e = Embed(
           tpe = "rich",
           title = rl.title,
-          description = rl.description.map(_.originalText),
+          description = Some(rl.description.map(_.originalText).mkString("\n")).filter(_.nonEmpty),
           url = rl.url,
           timestamp = Some(Instant.now),
           color = rl.color,
@@ -217,13 +218,23 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
           author = rl.author.map { case author: Content.RichLayout => EmbedAuthor(author.title.get, author.image.map(_.url)); case author => EmbedAuthor(author.originalText) },
           fields = rl.fields.map(f => EmbedField(f.name, f.value.originalText, f.inline)).toArray
         )
-        client.channels.createMessage(Snowflake(channel.id), null, embed = e).map(mapMessage)
+        client.channels.createMessage(Snowflake(channel.id), null, embed = e, attachments = attachments.toArray, progressListener = progressListener).map(mapMessage)
     }
   }
-  def getLastMessages(channel: Channel, from: Option[Long] = None, limit: Option[Int]): Future[Seq[Message]] =
-    client.channels.getMessages(Snowflake(channel.id),
-                                before = from.map(Snowflake.apply) orElse Option(channels.get(channel.id)).map(_.lastMessage) getOrElse NoSnowflake,
-                                limit = limit.getOrElse(100)).map(_.map(mapMessage).reverse)
+  def getLastMessages(channel: Channel, from: Option[Long] = None, limit: Option[Int]): Future[Seq[Message]] = {
+//    println("Fetching messages for channel " + channel.name + ". Before index: " + (from.map(Snowflake.apply) orElse Option(channels.get(channel.id)).map(_.lastMessage) getOrElse NoSnowflake).snowflakeString)
+    from match {
+      case None => 
+        client.channels.getMessages(Snowflake(channel.id),
+                                    around = Option(channels.get(channel.id)).map(_.lastMessage) getOrElse NoSnowflake,
+                                    limit = limit.getOrElse(100)).map(_.map(mapMessage).reverse)
+      case Some(idx) =>
+        client.channels.getMessages(Snowflake(channel.id),
+                                    before = Snowflake(idx),
+                                    limit = limit.getOrElse(100)).map(_.map(mapMessage).reverse)
+    }
+  }
+  def markAsRead(message: Message): Future[Unit] = client.channels.ack(Snowflake(message.channelId), Snowflake(message.id))
   
   def getCustomEmoji(id: Long) = Some(s"$DiscordCdn/emojis/${Snowflake(id).snowflakeString}.png")
   
@@ -283,13 +294,28 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
       
       
     case ge@MessageCreateEvent(evt) =>
-//      if (evt.message.embeds.nonEmpty) println(JsonUtils.renderJson(ge.payload().jv.get, true))
-      Option(channels.get(evt.message.channelId)) foreach { data =>
+      if (evt.message.embeds.nonEmpty) {
+        val json = JsonUtils.renderJson(ge.payload().jv.get, true)
+        if (json.contains("outube")) println(json)
+      }
+      Option(channels.get(evt.message.channelId)).fold(println("Message arrived with no matching channel? " + evt.message)) { data =>
+//        val fullChannel = mapChannel(evt.message.channelId, data)
+//        println("channel " + fullChannel.name + " last message id " + evt.message.id.snowflakeString)
         channels.put(evt.message.channelId, data.copy(lastMessage = evt.message.id))
-        val toNotify = MessageEvent(mapMessage(evt.message), Created, this)
+        val toNotify = MessageCreatedEvent(mapMessage(evt.message), this)
         for (l <- listeners; if l.isDefinedAt(toNotify)) l(toNotify)
       }
-      
+    case ge@MessageUpdateEvent(evt) =>
+      Option(channels.get(evt.message.channelId)).fold(println("Message arrived with no matching channel? " + evt.message)) { data =>
+//        val fullChannel = mapChannel(evt.message.channelId, data)
+//        println("channel " + fullChannel.name + " last message id " + evt.message.id.snowflakeString)
+        channels.put(evt.message.channelId, data.copy(lastMessage = evt.message.id))
+        val content = Some(mapContent(evt.message.content, evt.message.embeds)).filter(_.nonEmpty)
+        val update = discordccc.model.MessageUpdate(evt.message.id, content, evt.message.editedTimestamp,
+                                                    Some(mapAttachments(evt.message.attachments)).filter(_.nonEmpty), evt.message.channelId, this)
+        val toNotify = MessageUpdatedEvent(update, this)
+        for (l <- listeners; if l.isDefinedAt(toNotify)) l(toNotify)
+      }
       
 //    case ge@GatewayEvent(EventType.MessageCreate, payload) =>
 //      try {
@@ -365,28 +391,30 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   private def mapUser(u: headache.User): DUser = DUser(u.userName.getBytes, u.bot, true /*TODO: not everyone is a friend*/, u.discriminator.toShort,
                                                        u.avatar.map(s => BitUtil.fromHex(s.stripPrefix("a_"))).getOrElse(null))
   
+  private def mapContent(content: Option[String], embeds: Array[Embed]): Seq[Content] = {
+    (content.map(Content.Text.apply) ++ embeds.map { embed =>
+        val colsMaxFields = embed.fields.foldLeft(Vector.empty[EmbedField] -> 0) {
+          case ((acc, inlinedRun), field) if !field.inline => (acc :+ field) -> 0
+          case ((acc, inlinedRun), field) if field.inline && inlinedRun < 3 => (acc :+ field) -> (inlinedRun + 1)
+          case ((acc, inlinedRun), field) if field.inline && inlinedRun == 3 => (acc :+ field.copy(inline = false)) -> 0
+        }._1
+        Content.RichLayout(
+          title = embed.title,
+          description = (embed.description.map(Content.Text) ++ embed.video.map(video => Content.InlinedMedia(embed.title.getOrElse(""), video.url, "", true))).toSeq,
+          url = embed.url,
+          timestamp = embed.timestamp,
+          color = embed.color,
+          footer = embed.footer.map(f => Content.RichLayout(title = Some(f.text), image = f.iconUrl.map(u => Content.InlinedImage(u, u, "")))),
+          image = embed.image.map(i => Content.InlinedImage(i.url, i.url, "", width = i.width, height = i.height)),
+          thumbnail = embed.thumbnail.map(i => Content.InlinedImage(i.url, i.url, "", width = i.width, height = i.height)),
+          author = embed.author.map(a => Content.RichLayout(title = Some(a.name), url = a.url, image = a.iconUrl.map(i => Content.InlinedImage(i, i, "")))).orElse(
+            embed.provider.map(prov => Content.RichLayout(title = Some(prov.name), url = prov.url))),
+          fields = colsMaxFields.map(f => Content.Field(f.name, Content.Text(f.value), f.inline))
+        )
+      }).to[Vector]
+  }
+  private def mapAttachments(attachments: Array[headache.Attachment]): Seq[Message.Attachment] = attachments.map(a => Message.Attachment(a.filename, a.url)) 
   private def mapMessage(m: headache.Message): Message = {
-//    m.embeds.foreach(e => println("Processing embed: " + e))
-    val content = Content.Text(m.content) +: m.embeds.map{ embed =>
-      val colsMaxFields = embed.fields.foldLeft(Vector.empty[EmbedField] -> 0) {
-        case ((acc, inlinedRun), field) if !field.inline => (acc :+ field) -> 0
-        case ((acc, inlinedRun), field) if field.inline && inlinedRun < 3 => (acc :+ field) -> (inlinedRun + 1)
-        case ((acc, inlinedRun), field) if field.inline && inlinedRun == 3 => (acc :+ field.copy(inline = false)) -> 0
-      }._1
-      Content.RichLayout(
-        title = embed.title,
-        description = embed.description.map(Content.Text),
-        url = embed.url,
-        timestamp = embed.timestamp,
-        color = embed.color,
-        footer = embed.footer.map(f => Content.RichLayout(title = Some(f.text), image = f.iconUrl.map(u => Content.InlinedImage(u, u, "")))),
-        image = embed.image.map(i => Content.InlinedImage(i.url, i.url, "", width = i.width, height = i.height)),
-        thumbnail = embed.thumbnail.map(i => Content.InlinedImage(i.url, i.url, "", width = i.width, height = i.height)),
-        author = embed.author.map(a => Content.RichLayout(title = Some(a.name), url = a.url, image = a.iconUrl.map(i => Content.InlinedImage(i, i, "")))).orElse(
-          embed.provider.map(prov => Content.RichLayout(title = Some(prov.name), url = prov.url))),
-        fields = colsMaxFields.map(f => Content.Field(f.name, Content.Text(f.value), f.inline))
-      )
-    }
-    Message(m.id, content, m.timestamp, m.editedTimestamp, m.attachments.map(a => Message.Attachment(a.filename, a.url)), m.channelId, m.author.id, this)
+    Message(m.id, mapContent(Option(m.content), m.embeds), m.timestamp, m.editedTimestamp, mapAttachments(m.attachments), m.channelId, m.author.id, this)
   }
 }

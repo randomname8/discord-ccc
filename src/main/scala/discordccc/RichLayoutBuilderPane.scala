@@ -25,7 +25,7 @@ class RichLayoutBuilderPaneText extends BaseApplication {
     res
   }
   val markdownRenderer = new DiscordMarkdownRenderer(getHostServices, imagesCache, id => None, id => None, id => None)
-  override val sceneRoot = new RichLayoutBuilderPane(new ChatTextInput(markdownRenderer, markdownRenderer.nodeFactory, emojis.mapValues(_.get)))
+  override val sceneRoot = new RichLayoutBuilderPane(new ChatTextInput(markdownRenderer, markdownRenderer.nodeFactory, emojis.mapValues(_.get.value.get.get)))
 }
 
 class RichLayoutBuilderPane(chatTextInputFactory: ChatTextInput) extends Control {
@@ -34,7 +34,7 @@ class RichLayoutBuilderPane(chatTextInputFactory: ChatTextInput) extends Control
   
   def getRichLayout(): Content.RichLayout = Content.RichLayout(
     title = Option(Skin.titleTextField.getText).filter(_.nonEmpty),
-    description = Option(Skin.descriptionTextArea.textArea.getText).filter(_.nonEmpty).map(Content.Text),
+    description = Seq(Skin.descriptionTextArea.textArea.getText).filter(_.nonEmpty).map(Content.Text),
     url = Option(Skin.urlTextField.getText).filter(_.nonEmpty),
     color = Option(Skin.colorChooser.getValue).filter(_ != Color.TRANSPARENT).map(_.toRgb),
     image = Option(Skin.mainImageUrlTextField.getText).filter(_.nonEmpty).map(t => Content.InlinedImage("", t, "")),

@@ -57,7 +57,7 @@ class ServersAccessTreeCell(
         case node: ChannelGroup =>
           node match {
             case node @ ServerNode(item) =>
-              val serverIcon = item.imageUrl.map(icon => imageIcon(imagesCache(icon).get)).getOrElse(new Label(item.name.charAt(0).toUpper.toString))
+              val serverIcon = item.imageUrl.map(icon => imageIcon(imagesCache(icon))).getOrElse(new Label(item.name.charAt(0).toUpper.toString))
               val graphic = entry(serverIcon, item.name, description = "server - " + item.location).modify(_.getStyleClass add "discord-guild")
               this setGraphic graphic
               
@@ -109,8 +109,16 @@ class ServersAccessTreeCell(
           
         case node @ ChannelNode(channel) =>
           val user = usersLookup(channel.dmUserId.get, channel)
-          val icon = user.imageUrl.map(icon => imageIcon(imagesCache(icon).get)).getOrElse(new Label(user.name.charAt(0).toUpper.toString))
+          val icon = user.imageUrl.map(icon => imageIcon(imagesCache(icon))).getOrElse(new Label(user.name.charAt(0).toUpper.toString))
           setGraphic(entry(icon, channel.name, if (user.friend) "Friend" else "DM"))
+          
+          newEventListenerReference(node)
+          node.unreadEvents.addListener(eventListenerReference)
+          if (node.unreadEvents.get) {
+            if (!getGraphic.getStyleClass.contains("unread-events")) getGraphic.getStyleClass.add("unread-events")
+          } else {
+            getGraphic.getStyleClass.remove("unread-events")
+          }
           
         case other => this setGraphic new Label("Unk. type " + other)
       }
@@ -138,7 +146,7 @@ class ServersAccessTreeCell(
             val name = item.fold(_.nickname, _.name)
             val color = item.left.toOption.flatMap(m => Option(m.color).filter(_ != 0).map(c => Color.rgb((c >>> 16) & 0xff, (c >>> 8) & 0xff, c & 0xff)))
             
-            val res = entry(imageIcon(imagesCache(user.imageUrl.getOrElse(defaultAvatarUrl)).get),
+            val res = entry(imageIcon(imagesCache(user.imageUrl.getOrElse(defaultAvatarUrl))),
                             name, if (user.bot) "BOT" else user.name + "#" + user.extra, color.orNull)
             if (item.left.toOption.map(_.isOwner) getOrElse false)
               res.getChildren add new ImageView(guildOwnerIcon).modify(_ setPreserveRatio true, _ setFitWidth textLabelFont.getSize)
@@ -152,10 +160,11 @@ class ServersAccessTreeCell(
       })
   }
   
-  private def imageIcon(icon: Image) = {
-    new StackPane().modify(
-      _ setBackground imageBackground(icon),
-      _ setStyle "-fx-pref-width: 2.5em; -fx-pref-height: 2.5em")
+  private def imageIcon(icon: WeakImage) = {
+    val res = new StackPane()
+    icon.onRetrieve(i => res setBackground imageBackground(i))
+    res setStyle "-fx-pref-width: 2.5em; -fx-pref-height: 2.5em"
+    res
   }
   private def entry(icon: Node, name: String, description: String, nameColor: Color = null) = {
     val nameAndDescription = vbox(new Label(name).modify(l => if (nameColor != null) l.setTextFill(nameColor)))(spacing = 5)

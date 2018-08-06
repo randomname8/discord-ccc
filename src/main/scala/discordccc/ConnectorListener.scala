@@ -1,7 +1,9 @@
 package discordccc
 
+import ccc._
 import discordccc.model.{Connector}, Connector._
 import javafx.application.Platform
+import javafx.beans.value.ChangeListener
 
 trait ConnectorListener { self: DiscordChat =>
   
@@ -17,11 +19,37 @@ trait ConnectorListener { self: DiscordChat =>
         }
       }
       
-    case MessageEvent(message, Created, connector) =>
+    case MessageCreatedEvent(message,  connector) =>
       val selectedChannel = selectedMessageChannel.get
       Platform.runLater { () => 
         if (selectedChannel != null && message.channelId == selectedChannel.id && message.connector == selectedChannel.connector) {
           addMessage(message)
+          
+          if (sceneRoot.getScene.getWindow.isFocused) {
+            connector.markAsRead(message).failed.foreach(_.printStackTrace)(JavafxExecutionContext)
+          } else {
+            lazy val focusOneoff: ChangeListener[java.lang.Boolean] = (prop, _, v) => if (v) {
+              //as soon as we regain focus, mark as read
+              prop.removeListener(focusOneoff)
+              connector.markAsRead(message).failed.foreach(_.printStackTrace)(JavafxExecutionContext)
+            }
+            sceneRoot.getScene.getWindow.focusedProperty.addListener(focusOneoff)
+          }
+          
+        } else {
+          connector.getChannel(message.channelId) foreach { c =>
+            if (c.dmUserId.nonEmpty) dmChannelUpdated(c)
+            else if (c.serverId.isEmpty) groupChannelUpdated(c)
+            else channelUpdated(c, connector.getServer(c.serverId.get).get)
+          }
+        }
+      }
+            
+    case MessageUpdatedEvent(message, connector) =>
+      val selectedChannel = selectedMessageChannel.get
+      Platform.runLater { () => 
+        if (selectedChannel != null && message.channelId == selectedChannel.id && message.connector == selectedChannel.connector) {
+          updateMessage(message)
         } else {
           connector.getChannel(message.channelId) foreach { c =>
             if (c.dmUserId.nonEmpty) dmChannelUpdated(c)

@@ -1,6 +1,7 @@
 package discordccc
 package model
 
+import org.asynchttpclient.request.body.multipart.Part
 import scala.concurrent.Future
 
 /**
@@ -19,8 +20,9 @@ trait Connector {
   def getMembers(channel: Channel): IndexedSeq[Member Either User]
   def getUser(id: Long): Option[User]
   
-  def sendMessage(channel: Channel, content: Content): Future[Message]
+  def sendMessage(channel: Channel, content: Content, attachments: Seq[Part] = Seq.empty, progressListener: (Long, Long, Long) => Unit = (_, _, _) => ()): Future[Message]
   def getLastMessages(channel: Channel, from: Option[Long] = None, limit: Option[Int] = None): Future[Seq[Message]]
+  def markAsRead(message: Message): Future[Unit]
   
   def getCustomEmoji(id: Long): Option[String]
   
@@ -32,12 +34,15 @@ object Connector {
   case class ChannelEvent(channel: Channel, status: Status, connector: Connector) extends Event
   case class ConnectionLost(connector: Connector) extends Event
   case class ConnectionRestablished(connector: Connector) extends Event
-  case class MessageEvent(message: Message, status: Status, connector: Connector) extends Event
+  case class MessageCreatedEvent(message: Message, connector: Connector) extends Event
+  case class MessageUpdatedEvent(message: MessageUpdate, connector: Connector) extends Event
   
   sealed trait Status
   case object Created extends Status
   case object Updated extends Status
   case object Deleted extends Status
+  
+  case class ProgressUpdate(title: String, currentProgress: Double, total: Double) extends Event
 }
 trait ConnectorEntity {
   def connector: Connector

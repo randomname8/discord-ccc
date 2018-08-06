@@ -6,7 +6,10 @@ import discordccc.model._
 import javafx.application.HostServices
 import javafx.scene.Node
 import javafx.scene.control.Label
+import javafx.scene.control.ProgressIndicator
 import javafx.scene.image.Image
+import javafx.scene.layout.Pane
+import javafx.scene.layout.Region
 import javafx.scene.text.Font
 import org.commonmark.{node => md}
 import org.commonmark.parser.{Parser => MdParser}
@@ -47,7 +50,11 @@ class DiscordMarkdownRenderer(hostServices: HostServices, imagesCache: collectio
       
     case CustomEmoji(name, emoji, animated) => (_, _, context) =>
       (customEmojiProvider(emoji) match {
-          case Some(emoji) => nodeFactory.mkEmoji(context)(name, imagesCache(if (!animated) emoji else emoji.replace(".png", ".gif")).get)
+          case Some(emoji) => 
+//            imagesCache(if (!animated) emoji else emoji.replace(".png", ".gif")).onRetrieve(im => )
+            DiscordMarkdownRenderer.loadingIcon(imagesCache(if (!animated) emoji else emoji.replace(".png", ".gif")))(i =>
+              nodeFactory.mkEmoji(context)(name, i))
+//            nodeFactory.mkEmoji(context)(name, imagesCache(if (!animated) emoji else emoji.replace(".png", ".gif")).get)
           case _ => new Label(s"<:$name:$emoji>").modify(_.getStyleClass add "unknown-emoji")
         }) -> true
   }
@@ -106,6 +113,17 @@ object DiscordMarkdownRenderer {
     def toNode(mention: Match) = CustomEmoji(mention.group(2), mention.group(3).toLong, mention.group(1) != null)
   }
   case class CustomEmoji(name: String, id: Long, animated: Boolean) extends md.CustomNode
+  
+  def loadingIcon(image: WeakImage)(onceLoaded: Image => Node): Node = {
+    val imageContainer = new Pane()
+    imageContainer.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE)
+    imageContainer.getChildren.add(new ProgressIndicator())
+    image.onRetrieve { image =>
+      imageContainer.getChildren.clear()
+      imageContainer.getChildren.add(onceLoaded(image))
+    }
+    imageContainer
+  }
 }
 
 class DiscordMarkdownNodeFactory(hostServices: HostServices, imagesCache: collection.Map[String, WeakImage]) extends DefaultMarkdownNodeFactory(hostServices, imagesCache) {
@@ -116,7 +134,7 @@ class DiscordMarkdownNodeFactory(hostServices: HostServices, imagesCache: collec
   }
   override def mkInlineContent(context: MarkdownRenderer.RenderContext)(title: String, url: String, altText: String, width: Double, height: Double) = {
     altText match {
-      case "emoji" => super.mkEmoji(context)(title, imagesCache(url).get)
+      case "emoji" => DiscordMarkdownRenderer.loadingIcon(imagesCache(url))(i => super.mkEmoji(context)(title, i))
       case _ => super.mkInlineContent(context)(title, url, altText, width, height)
     }
   }

@@ -15,6 +15,8 @@ case class Message(id: Long, content: Seq[Content], created: Instant, edited: Op
 object Message {
   case class Attachment(fileName: String, url: String)
 }
+case class MessageUpdate(id: Long, content: Option[Seq[Content]], edited: Option[Instant], attachments: Option[Seq[Message.Attachment]],
+                         channelId: Long, connector: Connector) extends ConnectorEntity
 
 sealed trait Content {
   def originalText: String
@@ -24,7 +26,7 @@ object Content {
   case class InlinedImage(name: String, url: String, originalText: String, isEmoji: Boolean = false, width: Int = -1, height: Int = -1) extends Content
   case class InlinedMedia(name: String, url: String, originalText: String, isVideo: Boolean) extends Content
   case class RichLayout(title: Option[String] = None,
-                        description: Option[Content] = None,
+                        description: Seq[Content] = Seq.empty,
                         url: Option[String] = None,
                         timestamp: Option[Instant] = None,
                         color: Option[Int] = None,
@@ -35,16 +37,16 @@ object Content {
                         fields: Seq[Field] = Seq.empty) extends Content {
     def originalText = {
       val sb = new StringBuilder()
-      title foreach (t => sb.append("**").append(t).append("**\\\n"))
-      description foreach (t => sb.append(t.originalText).append("**\\\n"))
-      image foreach (i => sb.append(i.originalText).append("**\\\n"))
+      title foreach (t => sb.append("**").append(t).append("**\\\n").append("**").append("=" * t.length).append("**\\\n"))
+      description foreach (t => sb.append(t.originalText).append("\\\n"))
+      image foreach (i => sb.append(i.originalText).append("\\\n"))
       url foreach (t => sb.append("[url:").append(t).append("]\\\n"))
       fields foreach { f => 
         sb.append(s"**${f.name}: **").append(f.value.originalText)
         if (f.inline) sb.append("\t") else sb.append("\\\n")
       }
-      footer foreach (t => sb.append(t.originalText).append("**\\\n"))
-      author foreach (t => sb.append("By ").append(t.originalText).append("**\\\n"))
+      footer foreach (t => sb.append(t.originalText).append("\\\n"))
+      author foreach (t => sb.append("By ").append(t.originalText).append("\\\n"))
       sb.result
     }
   }

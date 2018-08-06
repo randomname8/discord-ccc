@@ -9,7 +9,7 @@ import javafx.scene.paint.Color
 import org.asynchttpclient.AsyncHttpClient
 import JavafxExecutionContext.context
 
-class DiscordLoginDialog(ahc: AsyncHttpClient, listener: headache.DiscordClient.DiscordListener) extends Dialog[connector.DiscordConnector] {
+class DiscordLoginDialog(ahc: AsyncHttpClient) extends Dialog[connector.DiscordConnector] {
   private val loginButtonType = new ButtonType("Login", ButtonBar.ButtonData.OK_DONE)
   getDialogPane.getButtonTypes.addAll(loginButtonType, ButtonType.CANCEL)
   

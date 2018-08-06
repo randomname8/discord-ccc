@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.ColorPicker?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<HBox xmlns="http://javafx.com/javafx/10" xmlns:fx="http://javafx.com/fxml/1">
+   <children>
+      <BorderPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="400.0" HBox.hgrow="ALWAYS">
+         <top>
+            <HBox BorderPane.alignment="CENTER">
+               <children>
+                  <ColorPicker id="embed-colorchooser" prefHeight="33.0" prefWidth="69.0" />
+                  <TextField id="title-textfield" promptText="title" HBox.hgrow="SOMETIMES" />
+               </children>
+            </HBox>
+         </top>
+         <center>
+            <VBox BorderPane.alignment="CENTER">
+               <children>
+                  <TextArea prefHeight="200.0" prefWidth="200.0" promptText="description" />
+               </children>
+            </VBox>
+         </center>
+      </BorderPane>
+      <VBox prefHeight="400.0" prefWidth="166.0" HBox.hgrow="NEVER">
+         <children>
+            <TextField id="thumbnail-textfield" promptText="thumbnail url" />
+            <ImageView id="thumbnail-imageview" fitHeight="150.0" fitWidth="200.0" pickOnBounds="true" preserveRatio="true" />
+         </children>
+      </VBox>
+   </children>
+</HBox>

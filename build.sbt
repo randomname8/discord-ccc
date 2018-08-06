@@ -21,6 +21,7 @@ libraryDependencies ++= Seq(
   "com.boundary" % "high-scale-lib" % "1.0.6",
   "org.agrona" % "agrona" % "0.9.21",
   "io.dropwizard.metrics" % "metrics-core" % "3.1.0",
+  "com.sun.activation" % "javax.activation" % "1.2.0",
   "org.scalatest" %% "scalatest" % "3.0.5" % "test",
   "org.openjdk.jol" % "jol-core" % "0.9" % "test",
 )
@@ -32,8 +33,9 @@ mappings in (Compile, packageDoc) := Seq()
 javaOptions in Universal ++= Seq(
   //"-J-Xmx120m",
   "-J-Xms120m",
-  "-J-Xss520K",
-  "-J-XX:+UseStringDeduplication",
+  "-J-Xss256K",
+  "-J-XX:CICompilerCount=2",
+  "-J-XX:VMThreadStackSize=2048",
   "-Dprism.lcdtext=false",
   "-Dprism.text=t2k",
   "-Dcom.sun.javafx.fontSize=22",

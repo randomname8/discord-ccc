@@ -25,6 +25,14 @@
 }
 
 .rich-layout-content {
+  -fx-background-color: ladder(
+    -fx-background,
+    derive(-fx-background, 2%) 30%,
+    derive(-fx-background, -2%) 90%
+    );
+
+  -fx-background-insets: 1em;
+  -fx-background-radius: 0 0 0.5em 0.5em;
   -fx-border-color: transparent -fx-box-border -fx-box-border -fx-box-border, transparent;
   -fx-border-insets: 1em, 0.15em;
   -fx-border-width: 0.09em, 0.09em;
@@ -40,8 +48,7 @@
   -fx-effect: dropshadow(two-pass-box, whitesmoke, 0.25em, 1, 0, 0);
 }
 .rich-layout-content-title {
-  -fx-text-fill: mediumaquamarine;
-  -fx-font-size: 1.2em;
+  /*-fx-text-fill: mediumaquamarine;*/
   -fx-font-weight: bold;
 }
 .rich-layout-content-field-key {
@@ -54,7 +61,7 @@
 .unknown-channel-mention,
 .unknown-emoji {
   -fx-text-fill: red;
-  -fx-background-color: derive(-fx-text-fill, 30%);
+  -fx-background-color: derive(red, 30%);
 }
 
 .user-mention,

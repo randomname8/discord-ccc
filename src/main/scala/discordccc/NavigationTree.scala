@@ -20,7 +20,7 @@ trait NavigationTree { self: DiscordChat =>
     entries add groupChatNode
     
     navigationTree setCellFactory { _ => new ServersAccessTreeCell(imagesCache, c => c.connector.getMembers(c), (id, channel) => channel.connector.getUser(id).getOrElse(
-        User(0, "Unk.", false, s"Member $id not found", None, false, null)), emojis("👑").get) }
+        User(0, "Unk.", false, s"Member $id not found", None, false, null)), emojisLookup("👑")) }
     
     navigationTree.getSelectionModel.selectedItemProperty foreach (item => if (item != null) item match {
         case ChannelNode(channel) => 

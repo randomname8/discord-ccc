@@ -40,8 +40,6 @@ object ChatTreeItems {
   case class ServerNode(server: Server) extends TreeItem[Any](server) with ChannelGroup {
     override def toString = s"ServerNode($server)"
   }
-//  implicit def serverNode2Server(n: ServerNode) = n.server
-//  implicit def textChannelNode2TextChannel(tn: MessageChannelNode) = tn.messageChannel
   
   class DmsNode extends TreeItem[Any]("dms") with ChannelGroup {
     override def toString = "DmsNode"
@@ -49,24 +47,4 @@ object ChatTreeItems {
   class GroupChatNode extends TreeItem[Any]("group chats") with ChannelGroup {
     override def toString = "GroupChatNode"
   }
-  
-  
-//  abstract class DynamicTreeItem[T] private[ChatTreeModel](value: T)(childrenF: T => Seq[TreeItem[Any]]) extends TreeItem[Any](value) {
-//    //when the node is collapsed, discard calculated children
-//    addEventHandler[TreeItem.TreeModificationEvent[Any]](TreeItem.branchCollapsedEvent[Any], evt => super.getChildren.clear())
-//    override def getChildren = {
-//      val children = super.getChildren
-//      if (!children.isEmpty) children
-//      else {
-//        children.addAll(childrenF(value):_*)
-//        children
-//      }
-//    }
-//    def lastVisibleChildren = if (isExpanded) Some(super.getChildren) else None
-//    
-//    override def isLeaf = false
-//  }
-//  case class ServerNode(server: Server, channels: Seq[Channel]) extends DynamicTreeItem(server)(_ => channels.map(e => ChannelNode(e): TreeItem[Any]))
-//  
-//  case class ChannelNode(channel: Channel) extends DynamicTreeItem(channel)(_.members.map(e => new TreeItem[Any](e)))
 }
