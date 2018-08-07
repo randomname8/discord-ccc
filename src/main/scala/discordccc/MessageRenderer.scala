@@ -58,6 +58,8 @@ class MessageRenderer(hostServices: HostServices,
     renderer.render(text.trim.replace(" ```", "\n```").replace("\n", "\\\n"), emojiProvider)(context)
   
   def renderRichLayout(rl: Content.RichLayout, context: MarkdownRenderer.RenderContext): Node = {
+    val rootRichLayoutPane = new BorderPane()
+    
     val gap = Font.getDefault.getSize / 2
     val titlePane = new HBox().modify { n =>
       n.setSpacing(gap)
@@ -96,6 +98,7 @@ class MessageRenderer(hostServices: HostServices,
         val webview = new WebView()
         webview.setPrefSize(600, 480)
         webview.getEngine.load(url)
+        rootRichLayoutPane.sceneProperty foreach (s =>  if (s == null) {println(s"unloading video $name - $url"); webview.getEngine.load("about:blank")}) //unload as soon as it exists a scene
         val node = new renderer.nodeFactory.CollapsibleContent(name, webview, url)
         node.setOnMouseClicked { evt => evt.getButton match {
             case MouseButton.SECONDARY =>
@@ -166,14 +169,13 @@ class MessageRenderer(hostServices: HostServices,
       case other => throw new UnsupportedOperationException(s"$other not yet supported for footers")
     }
     
-    val rootPane = new BorderPane()
-    if (rl.color.isDefined || rl.author.isDefined) rootPane.setTop(titlePane)
-    rootPane setCenter content.modify(BorderPane.setMargin(_, new Insets(gap * 1.2)))
-    thumbnail foreach rootPane.setRight
+    if (rl.color.isDefined || rl.author.isDefined) rootRichLayoutPane.setTop(titlePane)
+    rootRichLayoutPane setCenter content.modify(BorderPane.setMargin(_, new Insets(gap * 1.2)))
+    thumbnail foreach rootRichLayoutPane.setRight
     footer foreach { f =>
       BorderPane.setMargin(f, new Insets(0.5.em, 0.5.em, 0.5.em, 1.5.em))
-      rootPane.setBottom(f)
+      rootRichLayoutPane.setBottom(f)
     }
-    rootPane
+    rootRichLayoutPane
   }
 }
