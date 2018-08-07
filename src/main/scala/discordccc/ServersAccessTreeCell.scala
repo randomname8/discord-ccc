@@ -35,15 +35,12 @@ class ServersAccessTreeCell(
     eventListenerReference = new WeakChangeListener((_, _, unreadEvents) => {
         val currentItem = getTreeItem
         if (currentItem == node) {
-//          println("node " + node + " has unread events " + unreadEvents)
-          //got to make sure the configured item is the same as when we registered the callback
-          //because despite the listener being only weakly stored, it'll only be claimed once the GC passes, hence the
-          //configured guard
           if (unreadEvents) {
             if (!getGraphic.getStyleClass.contains("unread-events")) getGraphic.getStyleClass.add("unread-events")
-//            println("added style, current styles " + getGraphic.getStyleClass)
+            applyCss()
           } else {
             getGraphic.getStyleClass.remove("unread-events")
+            applyCss()
           }
         }
       })
@@ -66,12 +63,7 @@ class ServersAccessTreeCell(
           }
           newEventListenerReference(node)
           node.unreadEvents.addListener(eventListenerReference)
-//          println(s"$node has unreadEvents ${node.unreadEvents.get}")
-          if (node.unreadEvents.get) {
-            if (!getGraphic.getStyleClass.contains("unread-events")) getGraphic.getStyleClass.add("unread-events")
-          } else {
-            getGraphic.getStyleClass.remove("unread-events")
-          }
+          eventListenerReference.changed(null, false, node.unreadEvents.get)
           
           
         case node @ ChannelNode(channel) if channel.dmUserId.isEmpty => 
@@ -101,11 +93,7 @@ class ServersAccessTreeCell(
           
           newEventListenerReference(node)
           node.unreadEvents.addListener(eventListenerReference)
-          if (node.unreadEvents.get) {
-            if (!getGraphic.getStyleClass.contains("unread-events")) getGraphic.getStyleClass.add("unread-events")
-          } else {
-            getGraphic.getStyleClass.remove("unread-events")
-          }
+          eventListenerReference.changed(null, false, node.unreadEvents.get)
           
         case node @ ChannelNode(channel) =>
           val user = usersLookup(channel.dmUserId.get, channel)
@@ -114,11 +102,7 @@ class ServersAccessTreeCell(
           
           newEventListenerReference(node)
           node.unreadEvents.addListener(eventListenerReference)
-          if (node.unreadEvents.get) {
-            if (!getGraphic.getStyleClass.contains("unread-events")) getGraphic.getStyleClass.add("unread-events")
-          } else {
-            getGraphic.getStyleClass.remove("unread-events")
-          }
+          eventListenerReference.changed(null, false, node.unreadEvents.get)
           
         case other => this setGraphic new Label("Unk. type " + other)
       }
@@ -129,8 +113,6 @@ class ServersAccessTreeCell(
   
   
   private type ListEntry = Either[Member, User]
-//  private case class MemberListEntry(member: Either[User, Member]) extends ListEntry
-//  private case object LoadMoreListEntry extends ListEntry
   private class MembersList(channel: Channel, members: IndexedSeq[Member Either User]) extends ListView[ListEntry] {
     getStyleClass.add("discord-text-channel-members")
 
