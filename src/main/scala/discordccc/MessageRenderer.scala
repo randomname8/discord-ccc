@@ -13,6 +13,8 @@ import javafx.scene.layout._
 import javafx.scene.text.{Font, Text, TextFlow}
 import javafx.scene.web.WebView
 import javafx.stage.Stage
+import regex._
+import scala.util.matching.Regex
 
 class MessageRenderer(hostServices: HostServices,
                       imageCache: collection.Map[String, WeakImage],
@@ -54,8 +56,28 @@ class MessageRenderer(hostServices: HostServices,
     richLayoutNodes ++ attachmentNodes 
   }
 
-  def renderMarkdown(text: String, context: MarkdownRenderer.RenderContext) =
-    renderer.render(text.trim.replace(" ```", "\n```").replace("\n", "\\\n"), emojiProvider)(context)
+  private val codeBlockPattern = gr"""(?s)\s*```(.*?)\s*```"""
+  def renderMarkdown(text: String, context: MarkdownRenderer.RenderContext) = {
+    val discordMd = text.trim
+    def escapeNewlines(t: String) = t.replace("\n", "\\\n").replace("\\\n\\\n", "\n\n\\\n")
+    val fixedMd: String = codeBlockPattern.findAllMatchIn(discordMd).to[List] match {
+      case codeBlocks if codeBlocks.nonEmpty =>
+        val res = new StringBuilder()
+        val head :: tail = codeBlocks.sliding(2).to[List]
+        def appendText(t: String) = res.append(escapeNewlines(t))
+        Some(head.head.before.toString) filter (_.nonEmpty) foreach appendText
+        def appendCodeBlock(m: Regex.Match) = res.append("\n```").append(m.group(1)).append("\n```\n")
+        appendCodeBlock(head.head)
+        for (List(prev, codeBlock) <- tail) {
+          appendText(discordMd.substring(prev.end, codeBlock.start))
+          appendCodeBlock(codeBlock)
+        }
+        codeBlocks.lastOption.map(_.after.toString) filter (_.nonEmpty) foreach appendText
+        res.result()
+      case _=> escapeNewlines(discordMd)
+    }
+    renderer.render(fixedMd/* .replace("\\\n\\\n", "\n\n\\\n") */, emojiProvider)(context)
+  }
   
   def renderRichLayout(rl: Content.RichLayout, context: MarkdownRenderer.RenderContext): Node = {
     val rootRichLayoutPane = new BorderPane()

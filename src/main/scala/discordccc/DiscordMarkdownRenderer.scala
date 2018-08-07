@@ -129,9 +129,9 @@ object DiscordMarkdownRenderer {
 class DiscordMarkdownNodeFactory(hostServices: HostServices, imagesCache: collection.Map[String, WeakImage]) extends DefaultMarkdownNodeFactory(hostServices, imagesCache) {
 
   override def desiredEmojiHeight = Font.getDefault.getSize * 2.2
-  override def mkCodeBlock(context: MarkdownRenderer.RenderContext)(language: Option[String], code: String) = {
-    super.mkCodeBlock(context)(language, code.replace("\\\n", "\n"))
-  }
+//  override def mkCodeBlock(context: MarkdownRenderer.RenderContext)(language: Option[String], code: String) = {
+//    super.mkCodeBlock(context)(language, code.replace("\\\n", "\n"))
+//  }
   override def mkInlineContent(context: MarkdownRenderer.RenderContext)(title: String, url: String, altText: String, width: Double, height: Double) = {
     altText match {
       case "emoji" => DiscordMarkdownRenderer.loadingIcon(imagesCache(url))(i => super.mkEmoji(context)(title, i))
