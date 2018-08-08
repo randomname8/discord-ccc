@@ -27,7 +27,7 @@ object DiscordChat {
   }
 }
 class DiscordChat extends BaseApplication with NavigationTree with ConnectorListener {
-  override val sceneRoot = FXMLLoader.load(getClass.getResource("/main-window.fxml")).asInstanceOf[Pane]
+  override val sceneRoot: Pane = FXMLLoader.load(getClass.getResource("/main-window.fxml")).asInstanceOf[Pane]
   val rootUserDataDirectory = (File.home/".discorccc").createDirectories()
   val emojioneDir = (rootUserDataDirectory/"emojione").createDirectories()
   val ahc = new DefaultAsyncHttpClient(new DefaultAsyncHttpClientConfig.Builder().setWebSocketMaxFrameSize(1024*1024).build())
@@ -242,7 +242,7 @@ class DiscordChat extends BaseApplication with NavigationTree with ConnectorList
   }
   
   private def discordLogin(stage: Stage): connector.DiscordConnector = {
-    val client = new DiscordLoginDialog(ahc).modify(_.initOwner(stage)).showAndWait()
+    val client = new DiscordLoginDialog(ahc, getParameters.getNamed.getOrDefault("token", "")).modify(_.initOwner(stage)).showAndWait()
     if (!client.isPresent) return sys.exit(0)
     client.get
   }
