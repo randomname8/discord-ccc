@@ -93,6 +93,10 @@ class MessageRenderingTest extends BaseApplication {
       imagesCache("https://images-ext-1.discordapp.net/external/SIa2Ai4PzRju_kMP7Qi23-XfDag5CN6Te8FHY9igC70/https/cdn.discordapp.com/avatars/271896884124057600/c33d9a609e3a7d80625331bc17c59e90.png"),
       Message(1, Seq(Content.Text("`monotyped text with\n a newline in it`")), Instant.now, None, Seq.empty, 0, 1, connector))
     
+    chatList.addEntry(
+      yorha,
+      imagesCache("https://images-ext-1.discordapp.net/external/SIa2Ai4PzRju_kMP7Qi23-XfDag5CN6Te8FHY9igC70/https/cdn.discordapp.com/avatars/271896884124057600/c33d9a609e3a7d80625331bc17c59e90.png"),
+      Message(1, Seq(Content.Text(">games\n>linux\n🙃")), Instant.now, None, Seq.empty, 0, 1, connector))
     
     chatList.addEntry(
       yorha,
@@ -115,7 +119,7 @@ class MessageRenderingTest extends BaseApplication {
     chatList.addEntry(
       yorha,
       imagesCache("https://images-ext-1.discordapp.net/external/SIa2Ai4PzRju_kMP7Qi23-XfDag5CN6Te8FHY9igC70/https/cdn.discordapp.com/avatars/271896884124057600/c33d9a609e3a7d80625331bc17c59e90.png"),
-      Message(1, Seq(Content.Text(""""
+      Message(1, Seq(Content.Text("""
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
  veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
  voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia
