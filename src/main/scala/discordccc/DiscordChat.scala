@@ -112,9 +112,10 @@ class DiscordChat extends BaseApplication with NavigationTree with ConnectorList
     
     chatTextInput.textArea.setOnKeyReleased { evt =>
       if (evt.getCode == KeyCode.ENTER) {
+        val ta = chatTextInput.textArea
         if (evt.isShiftDown) {
-          chatTextInput.textArea.insertText(chatTextInput.textArea.getCaretPosition, "\n")
-        } else if (!evt.isControlDown && !evt.isAltDown) {
+          ta.insertText(ta.getCaretPosition, "\n")
+        } else if (!evt.isControlDown && !evt.isAltDown && ta.getCaretPosition == ta.getLength) {
           evt.consume()
           sendUserInput()
         }
