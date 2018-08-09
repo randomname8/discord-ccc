@@ -144,7 +144,17 @@ class ServersAccessTreeCell(
   
   private def imageIcon(icon: WeakImage) = {
     val res = new StackPane()
-    icon.onRetrieve(i => res setBackground imageBackground(i))
+    icon.onRetrieve { i => 
+      def setImage() = {
+        if (JfxUtils.isAnimated(i)) {
+          val snap = JfxUtils.snapshot(i)
+          res setBackground imageBackground(snap)
+          res.hoverProperty.foreach (b => if (b) res setBackground imageBackground(i) else res setBackground imageBackground(snap))
+        } else res setBackground imageBackground(i)
+      }
+      if (i.getProgress == 1) setImage() 
+      else i.progressProperty foreach (n => if (n.doubleValue == 1) setImage())
+    }
     res setStyle "-fx-pref-width: 2.5em; -fx-pref-height: 2.5em"
     res
   }
