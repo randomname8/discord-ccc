@@ -294,10 +294,10 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
       
       
     case ge@MessageCreateEvent(evt) =>
-      if (evt.message.embeds.nonEmpty) {
-        val json = JsonUtils.renderJson(ge.payload().jv.get, true)
-        if (json.contains("outube")) println(json)
-      }
+//      if (evt.message.embeds.nonEmpty) {
+//        val json = JsonUtils.renderJson(ge.payload().jv.get, true)
+//        if (json.contains("outube")) println(json)
+//      }
       Option(channels.get(evt.message.channelId)).fold(println("Message arrived with no matching channel? " + evt.message)) { data =>
 //        val fullChannel = mapChannel(evt.message.channelId, data)
 //        println("channel " + fullChannel.name + " last message id " + evt.message.id.snowflakeString)
