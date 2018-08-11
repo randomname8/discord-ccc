@@ -222,7 +222,7 @@ class DiscordChat extends BaseApplication with NavigationTree with ConnectorList
   protected def addMessage(message: Message): Unit = {
     val selectedChannel = selectedMessageChannel.get
     val connector = selectedChannel.connector
-    val user = connector.getUser(message.authorId).getOrElse(User(0, "unk.", false, "non existent user?", None, false, connector))
+    val user = connector.getUser(message.authorId).orElse(message.webhookID.map(id => User(0, s"Webhook $id", false, "some webhook", None, false, connector))).getOrElse(User(0, "unk.", false, "non existent user?", None, false, connector))
     val member = connector.getMember(message.authorId, message.channelId).getOrElse( 
       Member(user.id, selectedChannel.serverId.getOrElse(0), user.name, Seq.empty, 0, false, connector))
     chatList.addEntry(member, imagesCache(user.imageUrl.getOrElse("/red-questionmark.png")), message)

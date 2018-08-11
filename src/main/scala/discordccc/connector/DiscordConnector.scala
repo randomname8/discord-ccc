@@ -415,6 +415,6 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   }
   private def mapAttachments(attachments: Array[headache.Attachment]): Seq[Message.Attachment] = attachments.map(a => Message.Attachment(a.filename, a.url)) 
   private def mapMessage(m: headache.Message): Message = {
-    Message(m.id, mapContent(Option(m.content), m.embeds), m.timestamp, m.editedTimestamp, mapAttachments(m.attachments), m.channelId, m.author.id, this)
+    Message(m.id, mapContent(Option(m.content), m.embeds), m.timestamp, m.editedTimestamp, mapAttachments(m.attachments), m.channelId, m.author.id, this, m.webhookId)
   }
 }
