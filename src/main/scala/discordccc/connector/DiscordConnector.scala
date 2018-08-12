@@ -184,7 +184,7 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
             val user = allUsers.get(userId)
             val roles = guildUsersRoles.getOrDefault(serverId, emptyLongMap).getOrDefault(userId, noRoles)
             Left(Member(userId, serverId, new String(guildUserNickname.getOrDefault(serverId, emptyLongMap).getOrDefault(userId, user.name)),
-                        roles.map(_.name), roles.sortBy(_.position).find(_.color != 0).map(_.color).getOrElse(0),
+                        roles.map(_.name), roles.sortBy(-_.position).find(_.color != 0).map(_.color).getOrElse(0),
                         guilds.get(serverId).ownerId == userId, DiscordConnector.this))
           }
         }
