@@ -130,7 +130,7 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
     val serverId = channel.guildId
     val roles = guildUsersRoles.getOrDefault(serverId, emptyLongMap).getOrDefault(userId, noRoles)
     Member(userId, serverId, new String(guildUserNickname.getOrDefault(serverId, emptyLongMap).getOrDefault(userId, user.name)),
-           roles.map(_.name), roles.sortBy(_.position).find(_.color != 0).map(_.color).getOrElse(0),
+           roles.map(_.name), roles.sortBy(-_.position).find(_.color != 0).map(_.color).getOrElse(0),
            Option(guilds.get(serverId)).map(_.ownerId == userId).getOrElse(false), DiscordConnector.this)
   }
   def getMembers(channel: Channel): IndexedSeq[Member Either User] = {
@@ -184,7 +184,7 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
             val user = allUsers.get(userId)
             val roles = guildUsersRoles.getOrDefault(serverId, emptyLongMap).getOrDefault(userId, noRoles)
             Left(Member(userId, serverId, new String(guildUserNickname.getOrDefault(serverId, emptyLongMap).getOrDefault(userId, user.name)),
-                        roles.map(_.name), roles.sortBy(_.position).find(_.color != 0).map(_.color).getOrElse(0),
+                        roles.map(_.name), roles.sortBy(-_.position).find(_.color != 0).map(_.color).getOrElse(0),
                         guilds.get(serverId).ownerId == userId, DiscordConnector.this))
           }
         }
@@ -415,6 +415,6 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   }
   private def mapAttachments(attachments: Array[headache.Attachment]): Seq[Message.Attachment] = attachments.map(a => Message.Attachment(a.filename, a.url)) 
   private def mapMessage(m: headache.Message): Message = {
-    Message(m.id, mapContent(Option(m.content), m.embeds), m.timestamp, m.editedTimestamp, mapAttachments(m.attachments), m.channelId, m.author.id, this)
+    Message(m.id, mapContent(Option(m.content), m.embeds), m.timestamp, m.editedTimestamp, mapAttachments(m.attachments), m.channelId, m.author.id, this, m.webhookId)
   }
 }

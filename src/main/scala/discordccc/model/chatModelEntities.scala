@@ -9,7 +9,7 @@ case class Channel(id: Long, serverId: Option[Long], name: String, topic: String
 case class Member(userId: Long, serverId: Long, nickname: String, roles: Seq[String], color: Int, isOwner: Boolean,
                   connector: Connector) extends ConnectorEntity
 case class Message(id: Long, content: Seq[Content], created: Instant, edited: Option[Instant], attachments: Seq[Message.Attachment],
-                   channelId: Long, authorId: Long, connector: Connector) extends ConnectorEntity {
+                   channelId: Long, authorId: Long, connector: Connector, webhookID: Option[String] = None) extends ConnectorEntity {
   def originalContent = content.map(_.originalText).mkString
 }
 object Message {
