@@ -242,7 +242,7 @@ class DiscordChat extends BaseApplication with NavigationTree with ConnectorList
   }
   
   private def discordLogin(stage: Stage): connector.DiscordConnector = {
-    val client = new DiscordLoginDialog(ahc, getParameters.getNamed.getOrDefault("token", "")).modify(_.initOwner(stage)).showAndWait()
+    val client = new DiscordLoginDialog(ahc, getParameters.getNamed.asScala.get("token")).modify(_.initOwner(stage)).showAndWait()
     if (!client.isPresent) return sys.exit(0)
     client.get
   }
