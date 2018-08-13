@@ -9,14 +9,14 @@ import javafx.scene.paint.Color
 import org.asynchttpclient.AsyncHttpClient
 import JavafxExecutionContext.context
 
-class DiscordLoginDialog(ahc: AsyncHttpClient, token: String = "") extends Dialog[connector.DiscordConnector] {
+class DiscordLoginDialog(ahc: AsyncHttpClient, token: Option[String] = None) extends Dialog[connector.DiscordConnector] {
   private val loginButtonType = new ButtonType("Login", ButtonBar.ButtonData.OK_DONE)
   getDialogPane.getButtonTypes.addAll(loginButtonType, ButtonType.CANCEL)
   
   setGraphic(new ImageView("/discordmaterial.png").modify(_.setSmooth(true), _.setFitWidth(200), _.setPreserveRatio(true)))
   setTitle("Insert discord user token")
   
-  private val tokenTextField = new TextField().modify(_ setPromptText "token", _.setMaxWidth(Double.MaxValue), _ setPrefColumnCount 30, _.setText(token))
+  private val tokenTextField = new TextField().modify(_ setPromptText "token", _.setMaxWidth(Double.MaxValue), _ setPrefColumnCount 30, _.setText(token.getOrElse("")))
   private val loadingIndicator = new ProgressBar().modify(_ setVisible false, _ setMaxWidth Double.MaxValue)
   private val statusMessage = new Label().modify(_ setTextFill Color.RED, _ setVisible false)
   getDialogPane setContent vbox(tokenTextField, statusMessage, loadingIndicator)(spacing = 20, fillWidth = true)
@@ -52,4 +52,8 @@ class DiscordLoginDialog(ahc: AsyncHttpClient, token: String = "") extends Dialo
     })
   
   setResultConverter(button => null) //this can only be triggered by the cancel button
+
+  if (token.nonEmpty) {
+    loginButton.fire()
+  }
 }
