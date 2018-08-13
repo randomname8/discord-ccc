@@ -300,7 +300,7 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
 //      }
       Option(channels.get(evt.message.channelId)).fold(println("Message arrived with no matching channel? " + evt.message)) { data =>
 //        val fullChannel = mapChannel(evt.message.channelId, data)
-//        println("channel " + fullChannel.name + " last message id " + evt.message.id.snowflakeString)
+//        println("channel " + fullChannel.name + " last message id " + evt.message.id.snowflakeString)      
         channels.put(evt.message.channelId, data.copy(lastMessage = evt.message.id))
         val toNotify = MessageCreatedEvent(mapMessage(evt.message), this)
         for (l <- listeners; if l.isDefinedAt(toNotify)) l(toNotify)
@@ -415,6 +415,15 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   }
   private def mapAttachments(attachments: Array[headache.Attachment]): Seq[Message.Attachment] = attachments.map(a => Message.Attachment(a.filename, a.url)) 
   private def mapMessage(m: headache.Message): Message = {
+    
+    //detect if the message comes from a webhook, and if so, check if we need to create a virtual member to represent it.
+    //This is a terrible side effect for this method but at least it is private and contained, and we don't have a better place to have it
+    m.webhookId foreach { id =>
+      //deliberately only regitser as user and not member, because we don't want to list it as a member
+      if (allUsers.get(id) == null)
+        allUsers.put(id, DUser(m.author.userName.getBytes, true, true, -1, m.author.avatar.map(s => BitUtil.fromHex(s.stripPrefix("a_"))).getOrElse(null)))
+    }
+    
     Message(m.id, mapContent(Option(m.content), m.embeds), m.timestamp, m.editedTimestamp, mapAttachments(m.attachments), m.channelId, m.author.id, this)
   }
 }
