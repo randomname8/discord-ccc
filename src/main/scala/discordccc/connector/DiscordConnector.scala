@@ -258,6 +258,7 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
       //having the guilds information, let's initialize the allUsers collection
       allUsers = new Long2ObjectHashMap((guilds.map(_.memberCount).sum * 1.1).toInt + 100, 0.9f)
       evt.privateChannels.foreach(c => addChannel(c, None))
+      guilds foreach addGuild
       if (conn != null) {
         guilds foreach (g => conn.sendRequestGuildMembers(g.id))
       }
@@ -330,7 +331,7 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
     val serverEvt = ServerEvent(server, Created, this)
     for (l <- listeners; if l.isDefinedAt(serverEvt)) l(serverEvt)
     
-    guild.channels.filter(_.tpe == headache.Channel.Type.GuildText) foreach (c => addChannel(c, Some(guild.id -> guildData.myRoles)))
+    guild.channels.filter(_.tpe == headache.Channel.Type.GuildText).sortBy(_.position).foreach(c => addChannel(c, Some(guild.id -> guildData.myRoles)))
 
   }
   private def addChannel(c: headache.Channel, guildIdAndMyRoles: Option[(Snowflake, Array[Snowflake])]): Unit = {
