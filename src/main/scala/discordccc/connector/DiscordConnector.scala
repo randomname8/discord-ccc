@@ -1,34 +1,22 @@
 package discordccc
 package connector
 
-import discordccc.model._
-import headache.{
-  DiscordClient,
-  Embed,
-  EmbedAuthor,
-  EmbedField,
-  EmbedImage,
-  EmbedFooter,
-  EmbedThumbnail,
-  GatewayOp,
-  GatewayEvents,
-  JsonUtils,
-  PermissionOverwrite,
-  Permissions,
-  Role,
-  Snowflake,
-  NoSnowflake,
-}, GatewayEvents._, JsonUtils.DynJValueSelector
 import java.time.Instant
 import java.util.Arrays
+
+import discordccc.model._
+import headache.GatewayEvents._
+import headache.JsonUtils.DynJValueSelector
+import headache.{DiscordClient, Embed, EmbedAuthor, EmbedField, EmbedFooter, EmbedImage, EmbedThumbnail, GatewayOp, JsonUtils, NoSnowflake, PermissionOverwrite, Permissions, Role, Snowflake}
 import org.agrona.BitUtil
-import org.agrona.collections.{LongArrayList, Long2ObjectHashMap}
+import org.agrona.collections.{Long2ObjectHashMap, LongArrayList}
 import org.asynchttpclient.AsyncHttpClient
 import org.asynchttpclient.request.body.multipart.Part
+
 import scala.collection.JavaConverters._
-import scala.collection.mutable.{TreeSet}
-import scala.concurrent.{Future, ExecutionContext}
+import scala.collection.mutable.TreeSet
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 
 object DiscordConnector {
   /*custom classes for state tracking, optimized for discord*/
@@ -43,8 +31,8 @@ object DiscordConnector {
   
   def main(args: Array[String]): Unit = {
     import better.files._
+    import headache.JsonUtils._
     import play.api.libs.json._
-    import headache.JsonCodecs._, headache.JsonUtils._
 //    val ahc = DiscordClient.newDefaultAsyncHttpClient
     val dc = new DiscordConnector(File("test-token").contentAsString(), null)
     dc.onGatewayEvent(null)(GatewayEvent(EventType.Ready, () => Json.parse(File("jmh/ready-evt.json").contentAsString()).dyn))
@@ -60,10 +48,11 @@ object DiscordConnector {
   }
 }
 class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector with DiscordClient.DiscordListener {
-  import DiscordConnector._, Connector._
+  import Connector._
+  import DiscordConnector._
   
   // important optimization when calculating permissions
-  private[this] val threadLocalRolesBuffer = ThreadLocal.withInitial(() => new collection.mutable.ArrayBuffer[PermissionOverwrite](15))
+  private[this] val threadLocalRolesBuffer: ThreadLocal[collection.mutable.ArrayBuffer[PermissionOverwrite]] = ThreadLocal.withInitial(() => new collection.mutable.ArrayBuffer[PermissionOverwrite](15))
   val client = {
     val identity = DiscordClient.ClientIdentity("Windows", "strife v1.0", "strife")
     new DiscordClient(token, this, ahc, clientIdentity = identity)
@@ -131,7 +120,7 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
     val roles = guildUsersRoles.getOrDefault(serverId, emptyLongMap).getOrDefault(userId, noRoles)
     Member(userId, serverId, new String(guildUserNickname.getOrDefault(serverId, emptyLongMap).getOrDefault(userId, user.name)),
            roles.map(_.name), roles.sortBy(-_.position).find(_.color != 0).map(_.color).getOrElse(0),
-           Option(guilds.get(serverId)).map(_.ownerId == userId).getOrElse(false), DiscordConnector.this)
+           Option(guilds.get(serverId)).exists(_.ownerId == userId), DiscordConnector.this)
   }
   def getMembers(channel: Channel): IndexedSeq[Member Either User] = {
     channel.serverId match {
@@ -261,8 +250,10 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   override def onGatewayEvent(conn: DiscordClient#GatewayConnection): GatewayEvent => Any = {
     case ge@ReadyEvent(evt) =>
       botData = BotData(evt.user)
-//      logFile append Json4sUtils.renderJson(ge.payload().d.jv.get, true)
-      val guilds = evt.guilds.collect { case Right(g) => g }
+      //  logFile append Json4sUtils.renderJson(ge.payload().d.jv.get, true)
+      val guildPositions: Option[Map[Snowflake, Int]] = evt.userSettings.map(_.guildPositions.zipWithIndex.toMap)
+      val availableGuilds = evt.guilds.collect { case Right(g) => g }
+      val guilds: Array[Guild] = guildPositions.map(gp => availableGuilds.sortWith { (x, y) => gp.getOrElse(x.id, 0) < gp.getOrElse(y.id, 0) }).getOrElse(availableGuilds)
       guilds foreach (guild => println(s"Guild ${guild.name}: ${guild.memberCount}"))
       //having the guilds information, let's initialize the allUsers collection
       allUsers = new Long2ObjectHashMap((guilds.map(_.memberCount).sum * 1.1).toInt + 100, 0.9f)
@@ -338,7 +329,7 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
     val serverEvt = ServerEvent(server, Created, this)
     for (l <- listeners; if l.isDefinedAt(serverEvt)) l(serverEvt)
     
-    guild.channels.filter(_.tpe == headache.Channel.Type.GuildText) foreach (c => addChannel(c, Some(guild.id -> guildData.myRoles)))
+    guild.channels.filter(_.tpe == headache.Channel.Type.GuildText).sortBy(_.position).foreach(c => addChannel(c, Some(guild.id -> guildData.myRoles)))
 
   }
   private def addChannel(c: headache.Channel, guildIdAndMyRoles: Option[(Snowflake, Array[Snowflake])]): Unit = {
