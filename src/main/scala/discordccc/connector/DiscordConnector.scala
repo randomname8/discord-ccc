@@ -72,13 +72,6 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   private[this] val emptyLongMapInstance = new Long2ObjectHashMap()
   private def emptyLongMap[T]: Long2ObjectHashMap[T] = emptyLongMapInstance.asInstanceOf[Long2ObjectHashMap[T]]
   private[this] val noRoles = Array.empty[Role]
-
-  private[this] class ExplicitSnowflakeOrdering(val explicit: Array[Snowflake]) extends Ordering[Snowflake] {
-    private val map: Map[Snowflake, Int] = explicit.zipWithIndex.toMap
-    override def compare(x: Snowflake, y: Snowflake) = {
-      map.getOrElse(x, 0) - map.getOrElse(y, 0)
-    }
-  }
   
   private def optSnowflake(s: Snowflake) = if (s == NoSnowflake) None else Some(s)
   
@@ -257,10 +250,10 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
   override def onGatewayEvent(conn: DiscordClient#GatewayConnection): GatewayEvent => Any = {
     case ge@ReadyEvent(evt) =>
       botData = BotData(evt.user)
-//      logFile append Json4sUtils.renderJson(ge.payload().d.jv.get, true)
-      val guildPositions = evt.userSettings.map(_.guildPositions)
+      //  logFile append Json4sUtils.renderJson(ge.payload().d.jv.get, true)
+      val guildPositions: Option[Map[Snowflake, Int]] = evt.userSettings.map(_.guildPositions.zipWithIndex.toMap)
       val availableGuilds = evt.guilds.collect { case Right(g) => g }
-      val guilds: Array[Guild] = guildPositions.map(gp => availableGuilds.sorted(new ExplicitSnowflakeOrdering(gp))).getOrElse(availableGuilds)
+      val guilds: Array[Guild] = guildPositions.map(gp => availableGuilds.sortWith { (x, y) => gp.getOrElse(x.id, 0) < gp.getOrElse(y.id, 0) }).getOrElse(availableGuilds)
       guilds foreach (guild => println(s"Guild ${guild.name}: ${guild.memberCount}"))
       //having the guilds information, let's initialize the allUsers collection
       allUsers = new Long2ObjectHashMap((guilds.map(_.memberCount).sum * 1.1).toInt + 100, 0.9f)
