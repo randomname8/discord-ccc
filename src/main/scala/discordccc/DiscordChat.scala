@@ -63,7 +63,7 @@ class DiscordChat extends BaseApplication with NavigationTree with ConnectorList
   
   val selectedMessageChannel = new SimpleObjectProperty[Channel](this, "selectedMessageChannel")
   
-  
+  override def stop(): Unit = sys.exit(0)
   override def extraInitialize(stage: Stage) = {
     sys.props("org.slf4j.simpleLogger.defaultLogLevel") = "debug"
     if (emojioneDir.isEmpty() || { val subFiles = emojioneDir.list.map(_.nameWithoutExtension).toArray; !EmojiOne.allEmojis.forall(e => subFiles.contains(e.filename))}) {
