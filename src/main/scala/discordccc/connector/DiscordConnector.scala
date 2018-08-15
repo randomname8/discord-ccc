@@ -259,6 +259,16 @@ class DiscordConnector(token: String, ahc: AsyncHttpClient) extends Connector wi
       allUsers = new Long2ObjectHashMap((guilds.map(_.memberCount).sum * 1.1).toInt + 100, 0.9f)
       evt.privateChannels.foreach(c => addChannel(c, None))
       guilds foreach addGuild
+      // Unread notification
+      for {
+        state <- evt.readState
+        lastRead <- state.lastMessageId
+        channelData = channels.get(state.id)
+        if channelData.lastMessage > lastRead
+      } {
+        val toDispatch = ChannelUnreadEvent(getChannel(state.id).get, this)
+        for (listener <- listeners; if listener.isDefinedAt(toDispatch)) listener(toDispatch)
+      }
       if (conn != null) guilds foreach (g => conn.sendRequestGuildMembers(g.id))
       
       
