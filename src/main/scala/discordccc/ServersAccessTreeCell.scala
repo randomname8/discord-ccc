@@ -3,8 +3,8 @@ package discordccc
 import ccc._, ccc.util._
 import discordccc.model._
 import javafx.scene.Node
-import javafx.scene.control.{Label, TreeCell, ListView, ListCell, TreeItem, TitledPane}
-import javafx.beans.value.WeakChangeListener
+import javafx.scene.control.{Label, TreeCell, ListView, ListCell, TitledPane}
+import javafx.beans.value.ChangeListener
 import javafx.collections.FXCollections
 import javafx.geometry.Pos
 import javafx.scene.image.{Image, ImageView}
@@ -28,22 +28,27 @@ class ServersAccessTreeCell(
   val guildOwnerIcon: Image) extends TreeCell[Any] {
   
   
-  //strong reference to our listener, this changes per item, effectively discarding the previous listener, and hence allowing it to be 
-  //reclaimed
-  private var eventListenerReference: WeakChangeListener[java.lang.Boolean] = _
-  private def newEventListenerReference(node: TreeItem[Any]): Unit = {
-    eventListenerReference = new WeakChangeListener((_, _, unreadEvents) => {
-        val currentItem = getTreeItem
-        if (currentItem == node) {
-          if (unreadEvents) {
-            if (!getGraphic.getStyleClass.contains("unread-events")) getGraphic.getStyleClass.add("unread-events")
-            applyCss()
-          } else {
-            getGraphic.getStyleClass.remove("unread-events")
-            applyCss()
-          }
-        }
-      })
+  val unreadEventsEventListener: ChangeListener[java.lang.Boolean] = (_, _, unreadEvents) => {
+    if (unreadEvents) {
+      if (!getGraphic.getStyleClass.contains("unread-events")) getGraphic.getStyleClass.add("unread-events")
+    } else {
+      getGraphic.getStyleClass.remove("unread-events")
+    }
+  }
+  
+  treeItemProperty.addListener { (_, oldItem, newItem) => 
+    oldItem match {
+      case null =>
+      case channelGroup: ChannelGroup => channelGroup.unreadEvents.removeListener(unreadEventsEventListener)
+      case channelNode: ChannelNode => channelNode.unreadEvents.removeListener(unreadEventsEventListener)
+      case _ =>
+    }
+    newItem match {
+      case null =>
+      case channelGroup: ChannelGroup => channelGroup.unreadEvents.addListener(unreadEventsEventListener)
+      case channelNode: ChannelNode => channelNode.unreadEvents.addListener(unreadEventsEventListener)
+      case _ =>
+    }
   }
   
   override protected def updateItem(item: Any, empty: Boolean): Unit = {
@@ -61,9 +66,7 @@ class ServersAccessTreeCell(
             case dms: DmsNode => setGraphic(new Label("DMs"))
             case chats: GroupChatNode => setGraphic(new Label("Group chats"))
           }
-          newEventListenerReference(node)
-          node.unreadEvents.addListener(eventListenerReference)
-          eventListenerReference.changed(null, false, node.unreadEvents.get)
+          unreadEventsEventListener.changed(null, false, node.unreadEvents.get)
           
           
         case node @ ChannelNode(channel) if channel.dmUserId.isEmpty => 
@@ -91,18 +94,14 @@ class ServersAccessTreeCell(
           
           this setGraphic res
           
-          newEventListenerReference(node)
-          node.unreadEvents.addListener(eventListenerReference)
-          eventListenerReference.changed(null, false, node.unreadEvents.get)
+          unreadEventsEventListener.changed(null, false, node.unreadEvents.get)
           
         case node @ ChannelNode(channel) =>
           val user = usersLookup(channel.dmUserId.get, channel)
           val icon = user.imageUrl.map(icon => imageIcon(imagesCache(icon))).getOrElse(new Label(user.name.charAt(0).toUpper.toString))
           setGraphic(entry(icon, channel.name, if (user.friend) "Friend" else "DM"))
           
-          newEventListenerReference(node)
-          node.unreadEvents.addListener(eventListenerReference)
-          eventListenerReference.changed(null, false, node.unreadEvents.get)
+          unreadEventsEventListener.changed(null, false, node.unreadEvents.get)
           
         case other => this setGraphic new Label("Unk. type " + other)
       }
