@@ -36,7 +36,8 @@ object Connector {
   case class ConnectionRestablished(connector: Connector) extends Event
   case class MessageCreatedEvent(message: Message, connector: Connector) extends Event
   case class MessageUpdatedEvent(message: MessageUpdate, connector: Connector) extends Event
-  
+  case class ChannelUnreadEvent(channel: Channel, connector: Connector) extends Event
+
   sealed trait Status
   case object Created extends Status
   case object Updated extends Status

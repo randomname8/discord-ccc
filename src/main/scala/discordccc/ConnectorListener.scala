@@ -19,7 +19,7 @@ trait ConnectorListener { self: DiscordChat =>
         }
       }
       
-    case MessageCreatedEvent(message,  connector) =>
+    case MessageCreatedEvent(message, connector) =>
       val selectedChannel = selectedMessageChannel.get
       Platform.runLater { () => 
         if (selectedChannel != null && message.channelId == selectedChannel.id && message.connector == selectedChannel.connector) {
@@ -37,11 +37,7 @@ trait ConnectorListener { self: DiscordChat =>
           }
           
         } else {
-          connector.getChannel(message.channelId) foreach { c =>
-            if (c.dmUserId.nonEmpty) dmChannelUpdated(c)
-            else if (c.serverId.isEmpty) groupChannelUpdated(c)
-            else channelUpdated(c, connector.getServer(c.serverId.get).get)
-          }
+          connector.getChannel(message.channelId).foreach(channelUpdated(_, connector))
         }
       }
             
@@ -51,12 +47,13 @@ trait ConnectorListener { self: DiscordChat =>
         if (selectedChannel != null && message.channelId == selectedChannel.id && message.connector == selectedChannel.connector) {
           updateMessage(message)
         } else {
-          connector.getChannel(message.channelId) foreach { c =>
-            if (c.dmUserId.nonEmpty) dmChannelUpdated(c)
-            else if (c.serverId.isEmpty) groupChannelUpdated(c)
-            else channelUpdated(c, connector.getServer(c.serverId.get).get)
-          }
+          connector.getChannel(message.channelId).foreach(channelUpdated(_, connector))
         }
+      }
+
+    case ChannelUnreadEvent(channel, connector) =>
+      Platform.runLater { () =>
+        connector.getChannel(channel.id).foreach(channelUpdated(_, connector))
       }
   }
 }

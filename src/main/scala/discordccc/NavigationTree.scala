@@ -44,6 +44,11 @@ trait NavigationTree { self: DiscordChat =>
   def channelUpdated(channel: Channel, inServer: Server): Unit = {
     findServer(inServer).getChildren.asScala.collectFirst { case n @ ChannelNode(`channel`) => n }.foreach(_.unreadEvents set true)
   }
+  def channelUpdated(c: Channel, connector: Connector): Unit = {
+    if (c.dmUserId.nonEmpty) dmChannelUpdated(c)
+    else if (c.serverId.isEmpty) groupChannelUpdated(c)
+    else channelUpdated(c, connector.getServer(c.serverId.get).get)
+  }
   
   def dmChannelModified(channel: Channel, added: Boolean): Unit = dmsNode.channelModified(channel, added)
   def groupChannelModified(channel: Channel, added: Boolean): Unit = groupChatNode.channelModified(channel, added)
